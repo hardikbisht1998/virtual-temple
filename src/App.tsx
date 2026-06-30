@@ -1,18 +1,41 @@
 import { useState } from 'react';
 import { useTempleStore } from './useTempleStore';
+import { OnboardingWizard } from './components/OnboardingWizard';
 import { TempleAltar } from './components/TempleAltar';
 import { IdolSelector } from './components/IdolSelector';
 import { PujaPanel } from './components/PujaPanel';
 import { BhajanPlayer } from './components/BhajanPlayer';
 
-const DECO_FONT = "'Cinzel Decorative', 'Cinzel', serif";
+const DECO_FONT    = "'Cinzel Decorative', serif";
 const HEADING_FONT = "'Cinzel', serif";
 
 export default function App() {
-  const { state, setTempleName, addIdol, removeIdol, offerGarland, lightIncense, lightDiya, resetPuja } = useTempleStore();
-  const [editingName, setEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState(state.templeName);
+  const {
+    user, state, incenseLit,
+    createUser, logout, setupTemple, setTempleName,
+    addIdol, removeIdol, offerGarland,
+    lightIncense, lightDiya, resetPuja,
+  } = useTempleStore();
 
+  const [customizing,  setCustomizing]  = useState(false);
+  const [editingName,  setEditingName]  = useState(false);
+  const [nameInput,    setNameInput]    = useState(state.templeName);
+
+  /* ── Onboarding / Re-setup ──────────────────────────────── */
+  if (!user || customizing) {
+    return (
+      <OnboardingWizard
+        existingUser={customizing ? user?.name : undefined}
+        onComplete={(uName, tName, idolIds) => {
+          if (!user) createUser(uName);
+          setupTemple(tName, idolIds);
+          setCustomizing(false);
+        }}
+      />
+    );
+  }
+
+  /* ── Temple name editing ────────────────────────────────── */
   function submitName() {
     if (nameInput.trim()) setTempleName(nameInput.trim());
     setEditingName(false);
@@ -24,17 +47,17 @@ export default function App() {
       style={{ background: 'radial-gradient(ellipse at top, #2d0800 0%, #0d0300 55%, #050100 100%)' }}
     >
       {/* ── Header ─────────────────────────────────────────── */}
-      <header className="relative text-center pt-6 pb-4 px-4">
-        {/* Top ornamental line */}
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <div className="h-px flex-1 max-w-32 sm:max-w-48" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,180,0,0.45))' }} />
-          <span className="text-amber-600/70 text-xs tracking-[0.4em]" style={{ fontFamily: HEADING_FONT }}>✦ OM ✦</span>
-          <div className="h-px flex-1 max-w-32 sm:max-w-48" style={{ background: 'linear-gradient(270deg, transparent, rgba(255,180,0,0.45))' }} />
+      <header className="relative text-center pt-5 pb-4 px-4">
+        {/* Top rule */}
+        <div className="flex items-center justify-center gap-3 mb-3">
+          <div className="h-px flex-1 max-w-32 sm:max-w-48" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,180,0,0.4))' }} />
+          <span className="text-amber-600/65 text-[10px] tracking-[0.4em]" style={{ fontFamily: HEADING_FONT }}>✦ OM ✦</span>
+          <div className="h-px flex-1 max-w-32 sm:max-w-48" style={{ background: 'linear-gradient(270deg, transparent, rgba(255,180,0,0.4))' }} />
         </div>
 
-        {/* Temple name row */}
-        <div className="flex items-center justify-center gap-3 sm:gap-5 mb-2">
-          <span className="text-4xl drop-shadow-lg" style={{ filter: 'drop-shadow(0 0 8px rgba(255,160,0,0.5))' }}>🛕</span>
+        {/* Title row */}
+        <div className="flex items-center justify-center gap-3 sm:gap-5 mb-1.5">
+          <span className="text-4xl" style={{ filter: 'drop-shadow(0 0 10px rgba(255,160,0,0.55))' }}>🛕</span>
           {editingName ? (
             <input
               autoFocus
@@ -48,32 +71,62 @@ export default function App() {
           ) : (
             <h1
               className="text-xl sm:text-2xl lg:text-3xl font-bold text-amber-100 cursor-pointer hover:text-amber-300 transition-colors"
-              style={{ fontFamily: DECO_FONT, textShadow: '0 0 32px rgba(255,180,0,0.35)' }}
+              style={{ fontFamily: DECO_FONT, textShadow: '0 0 30px rgba(255,180,0,0.3)' }}
               onClick={() => { setEditingName(true); setNameInput(state.templeName); }}
-              title="Click to rename your temple"
+              title="Click to rename"
             >
               {state.templeName}
             </h1>
           )}
-          <span className="text-4xl drop-shadow-lg" style={{ filter: 'drop-shadow(0 0 8px rgba(255,160,0,0.5))' }}>🛕</span>
+          <span className="text-4xl" style={{ filter: 'drop-shadow(0 0 10px rgba(255,160,0,0.55))' }}>🛕</span>
         </div>
 
         {/* Mantra */}
-        <p className="text-amber-600/70 text-[10px] sm:text-xs tracking-[0.3em] sm:tracking-[0.45em] uppercase" style={{ fontFamily: HEADING_FONT }}>
+        <p className="text-amber-600/65 text-[10px] tracking-[0.3em] sm:tracking-[0.45em] uppercase" style={{ fontFamily: HEADING_FONT }}>
           Om Namah Shivaya &nbsp;•&nbsp; Jai Shri Ram &nbsp;•&nbsp; Jai Mata Di
         </p>
 
         {state.lastPujaDate && (
-          <p className="text-amber-800/60 text-[10px] mt-1.5" style={{ fontFamily: HEADING_FONT }}>
+          <p className="text-amber-800/55 text-[10px] mt-1" style={{ fontFamily: HEADING_FONT }}>
             Last puja: {state.lastPujaDate}
           </p>
         )}
 
-        {/* Bottom ornamental line */}
-        <div className="flex items-center justify-center gap-3 mt-4">
-          <div className="h-px flex-1 max-w-36 sm:max-w-56" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,180,0,0.3))' }} />
-          <span className="text-amber-800/50 text-[10px] tracking-[0.6em]">✦ ✦ ✦</span>
-          <div className="h-px flex-1 max-w-36 sm:max-w-56" style={{ background: 'linear-gradient(270deg, transparent, rgba(255,180,0,0.3))' }} />
+        {/* Bottom rule + action buttons */}
+        <div className="flex items-center justify-between mt-3 gap-2">
+          <button
+            onClick={() => setCustomizing(true)}
+            className="text-[10px] px-3 py-1.5 rounded-lg border transition-all"
+            style={{
+              fontFamily: HEADING_FONT,
+              color: '#9a6520',
+              borderColor: 'rgba(150,80,0,0.3)',
+              background: 'rgba(0,0,0,0.2)',
+            }}
+            title="Re-design your temple"
+          >
+            ⚙ Customize
+          </button>
+
+          <div className="flex items-center gap-2">
+            <div className="h-px w-16 sm:w-24" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,180,0,0.25))' }} />
+            <span className="text-amber-800/40 text-[10px] tracking-[0.5em]">✦ ✦ ✦</span>
+            <div className="h-px w-16 sm:w-24" style={{ background: 'linear-gradient(270deg, transparent, rgba(255,180,0,0.25))' }} />
+          </div>
+
+          <button
+            onClick={logout}
+            className="text-[10px] px-3 py-1.5 rounded-lg border transition-all"
+            style={{
+              fontFamily: HEADING_FONT,
+              color: '#9a6520',
+              borderColor: 'rgba(150,80,0,0.3)',
+              background: 'rgba(0,0,0,0.2)',
+            }}
+            title="Switch user"
+          >
+            👤 {user.name}
+          </button>
         </div>
       </header>
 
@@ -83,7 +136,8 @@ export default function App() {
         <div className="lg:col-span-2 space-y-4">
           <TempleAltar
             placedIdols={state.placedIdols}
-            incenseLit={state.incenseLit}
+            incenseLit={incenseLit}
+            incenseLitAt={state.incenseLitAt}
             diyas={state.diyas}
             onRemove={removeIdol}
             onGarland={offerGarland}
@@ -94,7 +148,8 @@ export default function App() {
         {/* Right sidebar */}
         <div className="space-y-4">
           <PujaPanel
-            incenseLit={state.incenseLit}
+            incenseLit={incenseLit}
+            incenseLitAt={state.incenseLitAt}
             diyas={state.diyas}
             onLightIncense={lightIncense}
             onLightDiya={lightDiya}
@@ -106,20 +161,17 @@ export default function App() {
           {/* Stats */}
           <div
             className="rounded-xl overflow-hidden"
-            style={{ background: 'linear-gradient(160deg, #0d0700, #1c0d00)', border: '1px solid rgba(180,100,0,0.28)' }}
+            style={{ background: 'linear-gradient(160deg, #0d0700, #1c0d00)', border: '1px solid rgba(180,100,0,0.25)' }}
           >
             <div className="p-4">
-              <h3
-                className="text-amber-500/90 text-xs font-semibold tracking-[0.25em] uppercase text-center mb-3"
-                style={{ fontFamily: HEADING_FONT }}
-              >
+              <h3 className="text-amber-500/85 text-xs font-semibold tracking-[0.25em] uppercase text-center mb-3" style={{ fontFamily: HEADING_FONT }}>
                 Temple Blessings
               </h3>
               <div className="grid grid-cols-2 gap-2">
-                <Stat label="Idols" value={state.placedIdols.length} icon="🏛️" />
-                <Stat label="Garlands" value={state.placedIdols.filter(p => p.hasGarland).length} icon="🌸" />
-                <Stat label="Diyas" value={state.diyas} icon="🪔" />
-                <Stat label="Incense" value={state.incenseLit ? 'Lit' : '—'} icon="🕯️" />
+                <Stat icon="🏛️" label="Idols"    value={state.placedIdols.length} />
+                <Stat icon="🌸" label="Garlands" value={state.placedIdols.filter(p => p.hasGarland).length} />
+                <Stat icon="🪔" label="Diyas"    value={state.diyas.length} />
+                <Stat icon="🕯️" label="Incense"  value={incenseLit ? 'Lit' : '—'} />
               </div>
             </div>
           </div>
@@ -129,11 +181,11 @@ export default function App() {
       {/* ── Footer ─────────────────────────────────────────── */}
       <footer className="text-center py-5 px-4">
         <div className="flex items-center justify-center gap-3 mb-2">
-          <div className="h-px flex-1 max-w-20" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,180,0,0.18))' }} />
-          <span className="text-amber-900/70 text-sm">🙏</span>
-          <div className="h-px flex-1 max-w-20" style={{ background: 'linear-gradient(270deg, transparent, rgba(255,180,0,0.18))' }} />
+          <div className="h-px flex-1 max-w-20" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,180,0,0.15))' }} />
+          <span className="text-amber-900/60 text-sm">🙏</span>
+          <div className="h-px flex-1 max-w-20" style={{ background: 'linear-gradient(270deg, transparent, rgba(255,180,0,0.15))' }} />
         </div>
-        <p className="text-amber-900/50 text-[10px] tracking-[0.3em] uppercase" style={{ fontFamily: HEADING_FONT }}>
+        <p className="text-amber-900/45 text-[10px] tracking-[0.3em] uppercase" style={{ fontFamily: HEADING_FONT }}>
           May Peace and Prosperity Be Upon You
         </p>
       </footer>
@@ -141,15 +193,15 @@ export default function App() {
   );
 }
 
-function Stat({ label, value, icon }: { label: string; value: string | number; icon: string }) {
+function Stat({ icon, label, value }: { icon: string; label: string; value: string | number }) {
   return (
     <div
       className="rounded-lg p-2.5 text-center"
-      style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(120,60,0,0.25)' }}
+      style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(120,60,0,0.22)' }}
     >
       <div className="text-base leading-tight mb-0.5">{icon}</div>
       <div className="text-amber-300 text-base font-bold leading-tight">{value}</div>
-      <div className="text-amber-700/80 text-[10px] tracking-wide uppercase mt-0.5">{label}</div>
+      <div className="text-amber-700/75 text-[10px] tracking-wide uppercase mt-0.5">{label}</div>
     </div>
   );
 }

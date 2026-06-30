@@ -1,32 +1,92 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { TempleState } from './types';
+import type { TempleState, UserProfile, DivaItem } from './types';
 
-const STORAGE_KEY = 'virtual-temple-state';
+const USER_KEY  = 'vt-user-v2';
+const STATE_KEY = 'vt-state-v2';
+const THREE_HOURS = 3 * 60 * 60 * 1000;
 
 const defaultState: TempleState = {
   templeName: 'My Home Temple',
   placedIdols: [],
-  incenseLit: false,
-  diyas: 0,
+  incenseLitAt: null,
+  diyas: [],
   lastPujaDate: '',
 };
 
-function load(): TempleState {
+function loadUser(): UserProfile | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...defaultState, ...JSON.parse(raw) };
-  } catch {}
-  return defaultState;
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
 }
 
-function save(state: TempleState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function loadState(): TempleState {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (!raw) return defaultState;
+    const parsed = JSON.parse(raw);
+    return { ...defaultState, ...parsed };
+  } catch { return defaultState; }
+}
+
+function isActive(litAt: number | null): boolean {
+  return litAt !== null && Date.now() - litAt < THREE_HOURS;
 }
 
 export function useTempleStore() {
-  const [state, setState] = useState<TempleState>(load);
+  const [user,  setUserState]  = useState<UserProfile | null>(loadUser);
+  const [state, setState]      = useState<TempleState>(loadState);
 
-  useEffect(() => { save(state); }, [state]);
+  // Persist user
+  useEffect(() => {
+    if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+    else      localStorage.removeItem(USER_KEY);
+  }, [user]);
+
+  // Persist state
+  useEffect(() => {
+    localStorage.setItem(STATE_KEY, JSON.stringify(state));
+  }, [state]);
+
+  // Tick every 30 s — expire diyas and incense
+  useEffect(() => {
+    function tick() {
+      const now = Date.now();
+      setState(s => ({
+        ...s,
+        diyas: s.diyas.filter(d => d.expiresAt > now),
+        incenseLitAt: s.incenseLitAt && now - s.incenseLitAt < THREE_HOURS
+          ? s.incenseLitAt
+          : null,
+      }));
+    }
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const createUser = useCallback((name: string) => {
+    setUserState({ id: crypto.randomUUID(), name: name.trim(), createdAt: new Date().toISOString() });
+  }, []);
+
+  const logout = useCallback(() => {
+    setUserState(null);
+    setState(defaultState);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(STATE_KEY);
+  }, []);
+
+  const setupTemple = useCallback((name: string, idolIds: string[]) => {
+    setState(s => ({
+      ...s,
+      templeName: name || s.templeName,
+      placedIdols: idolIds.map(idolId => ({
+        instanceId: crypto.randomUUID(),
+        idolId,
+        hasGarland: false,
+      })),
+    }));
+  }, []);
 
   const setTempleName = useCallback((name: string) => {
     setState(s => ({ ...s, templeName: name }));
@@ -35,18 +95,12 @@ export function useTempleStore() {
   const addIdol = useCallback((idolId: string) => {
     setState(s => ({
       ...s,
-      placedIdols: [
-        ...s.placedIdols,
-        { instanceId: crypto.randomUUID(), idolId, hasGarland: false },
-      ],
+      placedIdols: [...s.placedIdols, { instanceId: crypto.randomUUID(), idolId, hasGarland: false }],
     }));
   }, []);
 
   const removeIdol = useCallback((instanceId: string) => {
-    setState(s => ({
-      ...s,
-      placedIdols: s.placedIdols.filter(p => p.instanceId !== instanceId),
-    }));
+    setState(s => ({ ...s, placedIdols: s.placedIdols.filter(p => p.instanceId !== instanceId) }));
   }, []);
 
   const offerGarland = useCallback((instanceId: string) => {
@@ -59,24 +113,36 @@ export function useTempleStore() {
   }, []);
 
   const lightIncense = useCallback(() => {
-    setState(s => ({ ...s, incenseLit: true, lastPujaDate: new Date().toDateString() }));
+    setState(s => ({ ...s, incenseLitAt: Date.now(), lastPujaDate: new Date().toDateString() }));
   }, []);
 
   const lightDiya = useCallback(() => {
-    setState(s => ({ ...s, diyas: s.diyas + 1 }));
+    const now = Date.now();
+    setState(s => ({
+      ...s,
+      diyas: [...s.diyas, { id: crypto.randomUUID(), litAt: now, expiresAt: now + THREE_HOURS }],
+      lastPujaDate: new Date().toDateString(),
+    }));
   }, []);
 
   const resetPuja = useCallback(() => {
     setState(s => ({
       ...s,
-      incenseLit: false,
-      diyas: 0,
+      incenseLitAt: null,
+      diyas: [],
       placedIdols: s.placedIdols.map(p => ({ ...p, hasGarland: false })),
     }));
   }, []);
 
+  const incenseLit = isActive(state.incenseLitAt);
+
   return {
+    user,
     state,
+    incenseLit,
+    createUser,
+    logout,
+    setupTemple,
     setTempleName,
     addIdol,
     removeIdol,

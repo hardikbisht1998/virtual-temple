@@ -1,9 +1,16 @@
+export interface UserProfile {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
 export interface Idol {
   id: string;
   name: string;
   emoji: string;
   description: string;
   color: string;
+  mantra: string;
 }
 
 export interface PlacedIdol {
@@ -12,11 +19,17 @@ export interface PlacedIdol {
   hasGarland: boolean;
 }
 
+export interface DivaItem {
+  id: string;
+  litAt: number;
+  expiresAt: number;
+}
+
 export interface TempleState {
   templeName: string;
   placedIdols: PlacedIdol[];
-  incenseLit: boolean;
-  diyas: number;
+  incenseLitAt: number | null;
+  diyas: DivaItem[];
   lastPujaDate: string;
 }
 

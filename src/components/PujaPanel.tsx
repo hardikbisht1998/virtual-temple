@@ -1,18 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { DivaItem } from '../types';
 
 interface Props {
   incenseLit: boolean;
-  diyas: number;
+  incenseLitAt: number | null;
+  diyas: DivaItem[];
   onLightIncense: () => void;
   onLightDiya: () => void;
   onRingBell: () => void;
   onReset: () => void;
 }
 
-export function PujaPanel({ incenseLit, diyas, onLightIncense, onLightDiya, onRingBell, onReset }: Props) {
+const THREE_HOURS = 3 * 60 * 60 * 1000;
+
+export function PujaPanel({ incenseLit, incenseLitAt, diyas, onLightIncense, onLightDiya, onRingBell, onReset }: Props) {
   const [bellRinging, setBellRinging] = useState(false);
-  const [bellNote, setBellNote] = useState(false);
+  const [bellNote,    setBellNote]    = useState(false);
 
   function handleBell() {
     setBellRinging(true);
@@ -23,43 +27,53 @@ export function PujaPanel({ incenseLit, diyas, onLightIncense, onLightDiya, onRi
     onRingBell();
   }
 
-  const pujaActive = incenseLit || diyas > 0;
+  const pujaActive = incenseLit || diyas.length > 0;
+
+  // Incense remaining time
+  const incenseRemaining = incenseLit && incenseLitAt
+    ? Math.max(0, incenseLitAt + THREE_HOURS - Date.now())
+    : 0;
+  const incenseH = Math.floor(incenseRemaining / 3_600_000);
+  const incenseM = Math.floor((incenseRemaining % 3_600_000) / 60_000);
+
+  // Nearest diya expiry
+  const nearestDiya = diyas.length > 0 ? diyas.reduce((a, b) => a.expiresAt < b.expiresAt ? a : b) : null;
 
   return (
     <div
       className="rounded-xl overflow-hidden"
-      style={{
-        background: 'linear-gradient(160deg, #180800 0%, #2a1000 100%)',
-        border: '1px solid rgba(180,100,0,0.28)',
-      }}
+      style={{ background: 'linear-gradient(160deg, #180800, #2a1000)', border: '1px solid rgba(180,100,0,0.25)' }}
     >
       <div className="p-4">
         <h3
-          className="text-amber-400/90 text-xs font-semibold tracking-[0.25em] uppercase text-center mb-4"
+          className="text-amber-400/85 text-xs font-semibold tracking-[0.25em] uppercase text-center mb-4"
           style={{ fontFamily: "'Cinzel', serif" }}
         >
           🪔 Daily Puja
         </h3>
 
         <div className="grid grid-cols-2 gap-2.5">
+          {/* Incense */}
           <PujaButton
             emoji="🕯️"
             label={incenseLit ? 'Incense Lit' : 'Light Incense'}
-            sublabel="Agarbatti"
+            sublabel={incenseLit ? `${incenseH}h ${String(incenseM).padStart(2,'0')}m left` : 'Agarbatti • 3h'}
             done={incenseLit}
             onClick={onLightIncense}
             accentColor="#FF8C00"
           />
 
+          {/* Diya */}
           <PujaButton
             emoji="🪔"
-            label={diyas > 0 ? `${diyas} Diya${diyas > 1 ? 's' : ''}` : 'Light Diya'}
-            sublabel="Deepam"
+            label={diyas.length > 0 ? `${diyas.length} Diya${diyas.length > 1 ? 's' : ''}` : 'Light Diya'}
+            sublabel={nearestDiya ? `first out in ${fmtRemaining(nearestDiya.expiresAt)}` : 'Deepam • 3h'}
             done={false}
             onClick={onLightDiya}
             accentColor="#FF5500"
           />
 
+          {/* Bell */}
           <div className="relative">
             <AnimatePresence>
               {bellNote && (
@@ -86,32 +100,40 @@ export function PujaPanel({ incenseLit, diyas, onLightIncense, onLightDiya, onRi
             />
           </div>
 
+          {/* Reset */}
           <PujaButton
             emoji="🔄"
             label="New Puja"
-            sublabel="Reset"
+            sublabel="Reset all"
             done={false}
             onClick={onReset}
             accentColor="#667"
           />
         </div>
 
-        {/* Status bar */}
+        {/* Status */}
         <div
           className="mt-3 py-2 px-3 rounded-lg text-center text-xs border"
           style={{
-            background: pujaActive ? 'rgba(255,130,0,0.09)' : 'rgba(0,0,0,0.22)',
-            borderColor: pujaActive ? 'rgba(255,130,0,0.28)' : 'rgba(80,40,0,0.3)',
+            background: pujaActive ? 'rgba(255,130,0,0.08)' : 'rgba(0,0,0,0.22)',
+            borderColor: pujaActive ? 'rgba(255,130,0,0.25)' : 'rgba(80,40,0,0.28)',
             color: pujaActive ? '#FFA040' : '#6B4A18',
           }}
         >
           {pujaActive
-            ? `🌟 Puja in progress — ${diyas} diya${diyas !== 1 ? 's' : ''} lit`
+            ? `🌟 Puja active — ${diyas.length} diya${diyas.length !== 1 ? 's' : ''} burning`
             : '🙏 Begin your morning puja'}
         </div>
       </div>
     </div>
   );
+}
+
+function fmtRemaining(expiresAt: number): string {
+  const ms = Math.max(0, expiresAt - Date.now());
+  const h  = Math.floor(ms / 3_600_000);
+  const m  = Math.floor((ms % 3_600_000) / 60_000);
+  return `${h}h ${String(m).padStart(2, '0')}m`;
 }
 
 interface PujaButtonProps {
@@ -131,7 +153,7 @@ function PujaButton({ emoji, label, sublabel, done, onClick, accentColor, extraC
       className={`relative w-full flex flex-col items-center gap-1 py-3 px-2 rounded-xl border transition-all duration-200 cursor-pointer active:scale-95 ${extraClass}`}
       style={{
         background: done ? `${accentColor}18` : 'rgba(0,0,0,0.25)',
-        borderColor: done ? `${accentColor}50` : 'rgba(100,50,0,0.32)',
+        borderColor: done ? `${accentColor}50` : 'rgba(100,50,0,0.3)',
       }}
       onMouseEnter={e => {
         if (!done) {
@@ -144,7 +166,7 @@ function PujaButton({ emoji, label, sublabel, done, onClick, accentColor, extraC
         if (!done) {
           const el = e.currentTarget as HTMLButtonElement;
           el.style.background = 'rgba(0,0,0,0.25)';
-          el.style.borderColor = 'rgba(100,50,0,0.32)';
+          el.style.borderColor = 'rgba(100,50,0,0.3)';
         }
       }}
     >
@@ -153,15 +175,15 @@ function PujaButton({ emoji, label, sublabel, done, onClick, accentColor, extraC
       )}
       <span className={`text-2xl leading-none ${extraClass}`}>{emoji}</span>
       <span className="text-amber-200/85 text-[11px] font-medium leading-tight text-center mt-0.5">{label}</span>
-      <span className="text-amber-700/65 text-[9px] tracking-wide">{sublabel}</span>
+      <span className="text-amber-700/60 text-[9px] tracking-wide text-center leading-tight">{sublabel}</span>
     </button>
   );
 }
 
 function playBellSound() {
   try {
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
+    const ctx  = new AudioContext();
+    const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
