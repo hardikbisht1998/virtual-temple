@@ -32,10 +32,3 @@ export interface TempleState {
   diyas: DivaItem[];
   lastPujaDate: string;
 }
-
-export interface BhajanTrack {
-  id: string;
-  title: string;
-  deity: string;
-  url: string;
-}

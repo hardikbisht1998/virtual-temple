@@ -1,3 +1,5 @@
+import { DeityArt, hasDeityArt } from './DeityArt';
+
 interface Props {
   emoji: string;
   name: string;
@@ -40,7 +42,7 @@ export function DeityPhoto({ emoji, name, color, size = 'md', hasGarland = false
       <div className="absolute bottom-1 left-1 w-2.5 h-2.5 border-b-2 border-l-2 rounded-bl-sm" style={{ borderColor: `${color}70` }} />
       <div className="absolute bottom-1 right-1 w-2.5 h-2.5 border-b-2 border-r-2 rounded-br-sm" style={{ borderColor: `${color}70` }} />
 
-      {/* Spotlight glow behind emoji */}
+      {/* Spotlight glow behind portrait */}
       <div
         className="absolute rounded-full"
         style={{
@@ -50,24 +52,37 @@ export function DeityPhoto({ emoji, name, color, size = 'md', hasGarland = false
         }}
       />
 
-      {/* Deity emoji */}
-      <span
-        style={{
-          fontSize: emojiPx,
-          lineHeight: 1,
-          filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.7))',
-          position: 'relative',
-          zIndex: 1,
-          paddingBottom: hasGarland ? 10 : 0,
-        }}
-      >
-        {emoji}
-      </span>
+      {/* Deity portrait (vector art, emoji fallback) */}
+      {hasDeityArt(name) ? (
+        <div
+          className="absolute inset-0 z-[1]"
+          style={{
+            top: border + 1,
+            bottom: hasGarland || showName ? 8 : 2,
+            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))',
+          }}
+        >
+          <DeityArt deity={name} />
+        </div>
+      ) : (
+        <span
+          style={{
+            fontSize: emojiPx,
+            lineHeight: 1,
+            filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.7))',
+            position: 'relative',
+            zIndex: 1,
+            paddingBottom: hasGarland ? 10 : 0,
+          }}
+        >
+          {emoji}
+        </span>
+      )}
 
       {/* Garland */}
       {hasGarland && (
         <div
-          className="absolute bottom-0 left-0 right-0 text-center"
+          className="absolute bottom-0 left-0 right-0 text-center z-[2]"
           style={{ fontSize: size === 'xs' ? 8 : size === 'sm' ? 10 : 12, lineHeight: '18px' }}
         >
           🌸🌼🌸
@@ -77,7 +92,7 @@ export function DeityPhoto({ emoji, name, color, size = 'md', hasGarland = false
       {/* Name plate */}
       {showName && (
         <div
-          className="absolute bottom-0 left-0 right-0 text-center"
+          className="absolute bottom-0 left-0 right-0 text-center z-[2]"
           style={{
             background: `${color}DD`,
             fontSize: 7,

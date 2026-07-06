@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { TempleState, UserProfile, DivaItem } from './types';
+import type { TempleState, UserProfile } from './types';
 
 const USER_KEY  = 'vt-user-v2';
 const STATE_KEY = 'vt-state-v2';
@@ -69,6 +69,10 @@ export function useTempleStore() {
     setUserState({ id: crypto.randomUUID(), name: name.trim(), createdAt: new Date().toISOString() });
   }, []);
 
+  const setUserName = useCallback((name: string) => {
+    setUserState(u => (u ? { ...u, name: name.trim() } : u));
+  }, []);
+
   const logout = useCallback(() => {
     setUserState(null);
     setState(defaultState);
@@ -101,6 +105,10 @@ export function useTempleStore() {
 
   const removeIdol = useCallback((instanceId: string) => {
     setState(s => ({ ...s, placedIdols: s.placedIdols.filter(p => p.instanceId !== instanceId) }));
+  }, []);
+
+  const removeIdolsOfType = useCallback((idolId: string) => {
+    setState(s => ({ ...s, placedIdols: s.placedIdols.filter(p => p.idolId !== idolId) }));
   }, []);
 
   const offerGarland = useCallback((instanceId: string) => {
@@ -141,11 +149,13 @@ export function useTempleStore() {
     state,
     incenseLit,
     createUser,
+    setUserName,
     logout,
     setupTemple,
     setTempleName,
     addIdol,
     removeIdol,
+    removeIdolsOfType,
     offerGarland,
     lightIncense,
     lightDiya,

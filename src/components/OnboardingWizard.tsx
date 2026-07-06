@@ -5,14 +5,16 @@ import { DeityPhoto } from './DeityPhoto';
 
 interface Props {
   existingUser?: string;
+  existingTempleName?: string;
+  existingIdolIds?: string[];
   onComplete: (userName: string, templeName: string, idolIds: string[]) => void;
 }
 
-export function OnboardingWizard({ existingUser, onComplete }: Props) {
+export function OnboardingWizard({ existingUser, existingTempleName, existingIdolIds, onComplete }: Props) {
   const [step, setStep] = useState(existingUser ? 1 : 0);
   const [userName,    setUserName]    = useState(existingUser ?? '');
-  const [templeName,  setTempleName]  = useState('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [templeName,  setTempleName]  = useState(existingTempleName ?? '');
+  const [selectedIds, setSelectedIds] = useState<string[]>(existingIdolIds ?? []);
 
   function toggleIdol(id: string) {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -69,7 +71,7 @@ export function OnboardingWizard({ existingUser, onComplete }: Props) {
 
         {/* Progress bar */}
         <div className="flex items-center gap-2 mt-6 justify-center">
-          {(existingUser ? [1, 2, 3] : [0, 1, 2, 3]).map((s, idx) => (
+          {(existingUser ? [1, 2, 3] : [0, 1, 2, 3]).map(s => (
             <div
               key={s}
               className="rounded-full transition-all duration-300"

@@ -1,4 +1,4 @@
-import type { Idol, BhajanTrack } from './types';
+import type { Idol } from './types';
 
 export const IDOLS: Idol[] = [
   { id: 'ganesha',   name: 'Ganesha',   emoji: '🐘', description: 'Remover of Obstacles', color: '#FF8C00', mantra: 'Om Gan Ganpataye Namah' },
@@ -9,13 +9,4 @@ export const IDOLS: Idol[] = [
   { id: 'ram',       name: 'Ram',       emoji: '🏹', description: 'The Righteous King',    color: '#228B22', mantra: 'Jai Shri Ram' },
   { id: 'hanuman',   name: 'Hanuman',   emoji: '🙏', description: 'The Devoted Warrior',   color: '#FF4500', mantra: 'Jai Bajrang Bali' },
   { id: 'saraswati', name: 'Saraswati', emoji: '🎶', description: 'Goddess of Wisdom',     color: '#00CED1', mantra: 'Om Aim Saraswatyei Namah' },
-];
-
-export const BHAJANS: BhajanTrack[] = [
-  { id: 'om-namah',        title: 'Om Namah Shivaya',        deity: 'Shiva',   url: '' },
-  { id: 'jai-ganesha',     title: 'Jai Ganesha',             deity: 'Ganesha', url: '' },
-  { id: 'hare-krishna',    title: 'Hare Krishna Mahamantra', deity: 'Krishna', url: '' },
-  { id: 'jai-ambe',        title: 'Jai Ambe Gauri',          deity: 'Durga',   url: '' },
-  { id: 'hanuman-chalisa', title: 'Hanuman Chalisa',         deity: 'Hanuman', url: '' },
-  { id: 'lakshmi-aarti',   title: 'Lakshmi Aarti',          deity: 'Lakshmi', url: '' },
 ];
