@@ -25,6 +25,7 @@ export interface Layout3D {
   floor: FloorConfig;
   hall: boolean; // classic pillared hall + grand arch preset
   room: boolean; // box enclosure: three walls, front and top open
+  mandir: boolean; // carved wooden mandir cabinet (modelled on assets/templestructure.jpg)
 }
 
 export const LAYOUT_KEY = 'vt-3d-v1';
@@ -36,6 +37,7 @@ export const DEFAULT_LAYOUT: Layout3D = {
   floor: { shape: 'circle', size: 'medium' },
   hall: false,
   room: true,
+  mandir: true,
 };
 
 export function loadLayout(): Layout3D {

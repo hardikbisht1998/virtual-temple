@@ -15,14 +15,22 @@ export default function MandirViewport({ placedIdols, onGarland }: {
   const [layout] = useState(loadLayout);
   const radius = FLOOR_RADII[layout.floor.size];
 
+  // Frame the shrine (murtis arc around z=-5) rather than the whole floor —
+  // when the wooden mandir is up, move in close so it fills the view.
+  const camZ = layout.mandir ? Math.max(11, radius * 0.8) : radius * 1.45;
+  const lookY = layout.mandir ? 3.4 : 1.8;
+
   return (
     <Canvas
-      camera={{ position: [0, 4.2, radius * 1.45], fov: 42 }}
-      onCreated={({ camera }) => camera.lookAt(0, 1.8, 0)}
+      shadows="soft"
+      dpr={[1, 2]}
+      camera={{ position: [0, 4.4, camZ], fov: 42 }}
+      onCreated={({ camera }) => camera.lookAt(0, lookY, 0)}
     >
       <MandirScene
         layout={layout}
         placedIdols={placedIdols}
+        showLabels={false}
         onItemDown={(id, e) => {
           e.stopPropagation();
           if (!id.startsWith('decor:')) onGarland(id);

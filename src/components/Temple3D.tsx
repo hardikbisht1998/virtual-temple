@@ -76,6 +76,10 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
     setLayout(l => ({ ...l, room: !l.room }));
   }, []);
 
+  const toggleMandir = useCallback(() => {
+    setLayout(l => ({ ...l, mandir: !l.mandir }));
+  }, []);
+
   const addDecor = useCallback((type: DecorType) => {
     const item: DecorItem = {
       id: crypto.randomUUID(),
@@ -139,6 +143,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
         <div className="flex-1" />
         <ToolBtn icon="📦" label="Cover" active={layout.room} onClick={toggleRoom} />
         <ToolBtn icon="🏛️" label="Temple Hall" active={layout.hall} onClick={toggleHall} />
+        <ToolBtn icon="🛕" label="Wood Mandir" active={layout.mandir} onClick={toggleMandir} />
       </div>
 
       {/* ── Decor toolbar ──────────────────────────────────── */}
@@ -208,6 +213,8 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
         style={{ height: '68vh', minHeight: 420, border: '2px solid rgba(201,162,39,0.6)', boxShadow: '0 0 35px rgba(184,134,11,0.2), 0 8px 26px rgba(110,95,60,0.35)' }}
       >
         <Canvas
+          shadows="soft"
+          dpr={[1, 2]}
           camera={{ position: [0, 5, 11.5], fov: 45 }}
           onPointerMissed={() => setSelected(null)}
         >
