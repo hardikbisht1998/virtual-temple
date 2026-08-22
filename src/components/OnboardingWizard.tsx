@@ -3,6 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { IDOLS } from '../data';
 import { DeityPhoto } from './DeityPhoto';
 
+const DECO_FONT    = "'Cinzel Decorative', serif";
+const HEADING_FONT = "'Cinzel', serif";
+
 interface Props {
   existingUser?: string;
   existingTempleName?: string;
@@ -31,7 +34,7 @@ export function OnboardingWizard({ existingUser, existingTempleName, existingIdo
   return (
     <div
       className="min-h-screen w-full flex flex-col items-center justify-center px-4 py-10"
-      style={{ background: 'radial-gradient(ellipse at top, #2d0800 0%, #0d0300 55%, #050100 100%)' }}
+      style={{ background: 'radial-gradient(ellipse at top, #fffdf7 0%, #f6f0e2 55%, #e9dfc8 100%)' }}
     >
       <div className="w-full max-w-lg">
         <AnimatePresence mode="wait">
@@ -78,7 +81,8 @@ export function OnboardingWizard({ existingUser, existingTempleName, existingIdo
               style={{
                 height: 6,
                 width: step === s ? 28 : 10,
-                background: step === s ? '#FFB347' : step > s ? '#FF8C00' : 'rgba(255,180,0,0.18)',
+                background: step === s ? 'linear-gradient(90deg, #e6c14c, #b8860b)' : step > s ? '#b8860b' : 'rgba(201,162,39,0.3)',
+                boxShadow: step === s ? '0 0 10px rgba(184,134,11,0.5)' : 'none',
               }}
             />
           ))}
@@ -97,11 +101,11 @@ function Card({ children }: { children: React.ReactNode }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3 }}
-      className="rounded-2xl p-6 sm:p-8"
+      className="rounded-3xl p-6 sm:p-8"
       style={{
-        background: 'linear-gradient(160deg, #1c0900, #2e1200)',
-        border: '1px solid rgba(200,100,0,0.3)',
-        boxShadow: '0 0 60px rgba(200,80,0,0.06)',
+        background: 'linear-gradient(165deg, #ffffff 0%, #faf6ec 45%, #f2e8d4 100%)',
+        border: '2px solid rgba(201,162,39,0.65)',
+        boxShadow: '0 20px 50px rgba(110,95,60,0.18), 0 0 40px rgba(212,175,55,0.15)',
       }}
     >
       {children}
@@ -118,13 +122,13 @@ function PrimaryBtn({ children, onClick, disabled = false }: {
     <button
       onClick={onClick}
       disabled={disabled}
-      className="px-8 py-3 rounded-xl font-semibold text-sm transition-all"
+      className="px-7 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer shadow-md hover:scale-[1.02] active:scale-98"
       style={{
-        fontFamily: "'Cinzel', serif",
-        background: disabled ? 'rgba(80,40,0,0.3)' : 'linear-gradient(135deg, #FF8C00, #FF5500)',
-        color: disabled ? '#555' : '#fff',
+        fontFamily: HEADING_FONT,
+        background: disabled ? 'rgba(180,180,180,0.3)' : 'linear-gradient(135deg, #e6c14c, #b8860b)',
+        color: disabled ? '#999' : '#fff',
         cursor: disabled ? 'not-allowed' : 'pointer',
-        boxShadow: disabled ? 'none' : '0 4px 20px rgba(255,100,0,0.3)',
+        boxShadow: disabled ? 'none' : '0 4px 16px rgba(184,134,11,0.35)',
       }}
     >
       {children}
@@ -136,8 +140,13 @@ function BackBtn({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="px-5 py-3 rounded-xl text-sm border transition-all"
-      style={{ color: '#9a6520', borderColor: 'rgba(150,80,0,0.3)' }}
+      className="px-5 py-3 rounded-xl text-sm border font-semibold transition-all cursor-pointer hover:bg-amber-100/50"
+      style={{
+        fontFamily: HEADING_FONT,
+        color: '#7a5a1e',
+        borderColor: 'rgba(201,162,39,0.4)',
+        background: 'rgba(255,255,255,0.6)',
+      }}
     >
       ← Back
     </button>
@@ -157,10 +166,13 @@ function StyledInput({ value, onChange, placeholder, onEnter }: {
       onChange={e => onChange(e.target.value)}
       onKeyDown={e => e.key === 'Enter' && onEnter?.()}
       placeholder={placeholder}
-      className="w-full bg-black/35 rounded-xl px-4 py-3 text-amber-100 outline-none transition-all"
-      style={{ border: '1px solid rgba(180,100,0,0.35)', fontFamily: 'system-ui' }}
-      onFocus={e => (e.target.style.borderColor = 'rgba(255,180,0,0.65)')}
-      onBlur={e  => (e.target.style.borderColor = 'rgba(180,100,0,0.35)')}
+      className="w-full bg-white/80 rounded-xl px-4 py-3 text-amber-950 font-semibold outline-none transition-all"
+      style={{
+        border: '1.5px solid rgba(201,162,39,0.45)',
+        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.03)',
+      }}
+      onFocus={e => (e.target.style.borderColor = '#b8860b')}
+      onBlur={e  => (e.target.style.borderColor = 'rgba(201,162,39,0.45)')}
     />
   );
 }
@@ -176,18 +188,18 @@ function StepLogin({ onNext }: { onNext: (name: string) => void }) {
           🛕
         </div>
         <h1
-          className="text-2xl sm:text-3xl font-bold text-amber-100 mb-2"
-          style={{ fontFamily: "'Cinzel Decorative', serif", textShadow: '0 0 24px rgba(255,180,0,0.3)' }}
+          className="text-2xl sm:text-3xl font-bold mb-1"
+          style={{ fontFamily: DECO_FONT, color: '#6b5312', textShadow: '0 0 24px rgba(255,180,0,0.2)' }}
         >
           Virtual Temple
         </h1>
-        <p className="text-amber-700 text-xs tracking-widest" style={{ fontFamily: "'Cinzel', serif" }}>
-          Your personal sacred space
+        <p className="text-[11px] tracking-[0.3em] uppercase font-bold text-amber-700/80" style={{ fontFamily: HEADING_FONT }}>
+          Your Personal Sacred Home Altar
         </p>
       </div>
 
-      <label className="block text-amber-500/90 text-xs font-semibold tracking-widest uppercase mb-2" style={{ fontFamily: "'Cinzel', serif" }}>
-        Your Name
+      <label className="block text-amber-900 text-xs font-bold tracking-widest uppercase mb-2" style={{ fontFamily: HEADING_FONT }}>
+        Your Name / Devotee
       </label>
       <StyledInput
         value={name}
@@ -195,13 +207,13 @@ function StepLogin({ onNext }: { onNext: (name: string) => void }) {
         placeholder="Enter your name…"
         onEnter={() => name.trim() && onNext(name)}
       />
-      <p className="text-amber-800/60 text-[10px] mt-1.5">
-        Returning devotee? Enter your name to restore your temple.
+      <p className="text-amber-800/60 text-[10px] mt-1.5" style={{ fontFamily: HEADING_FONT }}>
+        Returning devotee? Enter your name to enter your temple.
       </p>
 
-      <div className="mt-6 flex justify-end">
+      <div className="mt-7 flex justify-end">
         <PrimaryBtn onClick={() => onNext(name)} disabled={!name.trim()}>
-          Begin Setup →
+          Begin Sacred Setup →
         </PrimaryBtn>
       </div>
     </Card>
@@ -221,14 +233,16 @@ function StepTempleName({ userName, value, onChange, onBack, onNext }: {
   return (
     <Card>
       <div className="text-center mb-6">
-        <div className="text-4xl mb-3">🏛️</div>
-        <h2 className="text-xl font-bold text-amber-100 mb-1" style={{ fontFamily: "'Cinzel', serif" }}>
-          Name Your Temple
+        <div className="text-4xl mb-2">🏛️</div>
+        <h2 className="text-xl font-bold text-amber-950 mb-1" style={{ fontFamily: DECO_FONT }}>
+          Name Your Mandir
         </h2>
-        <p className="text-amber-700/70 text-xs">What should your sacred space be called?</p>
+        <p className="text-amber-700/80 text-xs font-semibold" style={{ fontFamily: HEADING_FONT }}>
+          What should your sacred space be called?
+        </p>
       </div>
 
-      <label className="block text-amber-500/90 text-xs font-semibold tracking-widest uppercase mb-2" style={{ fontFamily: "'Cinzel', serif" }}>
+      <label className="block text-amber-900 text-xs font-bold tracking-widest uppercase mb-2" style={{ fontFamily: HEADING_FONT }}>
         Temple Name
       </label>
       <StyledInput
@@ -237,9 +251,11 @@ function StepTempleName({ userName, value, onChange, onBack, onNext }: {
         placeholder={placeholder}
         onEnter={onNext}
       />
-      <p className="text-amber-800/50 text-[10px] mt-1.5">Leave blank to use "{placeholder}"</p>
+      <p className="text-amber-800/60 text-[10px] mt-1.5" style={{ fontFamily: HEADING_FONT }}>
+        Leave blank to use "{placeholder}"
+      </p>
 
-      <div className="flex justify-between mt-6">
+      <div className="flex justify-between mt-7">
         {onBack ? <BackBtn onClick={onBack} /> : <div />}
         <PrimaryBtn onClick={onNext}>Choose Deities →</PrimaryBtn>
       </div>
@@ -258,11 +274,11 @@ function StepChooseIdols({ selected, onToggle, onBack, onNext }: {
   return (
     <Card>
       <div className="text-center mb-5">
-        <h2 className="text-xl font-bold text-amber-100 mb-1" style={{ fontFamily: "'Cinzel', serif" }}>
+        <h2 className="text-xl font-bold text-amber-950 mb-1" style={{ fontFamily: DECO_FONT }}>
           Choose Your Deities
         </h2>
-        <p className="text-amber-700/70 text-xs">
-          {selected.length === 0 ? 'Select at least one deity for your temple' : `${selected.length} selected`}
+        <p className="text-amber-700/80 text-xs font-semibold" style={{ fontFamily: HEADING_FONT }}>
+          {selected.length === 0 ? 'Select at least one deity for your mandir' : `${selected.length} deities selected`}
         </p>
       </div>
 
@@ -273,27 +289,27 @@ function StepChooseIdols({ selected, onToggle, onBack, onNext }: {
             <button
               key={idol.id}
               onClick={() => onToggle(idol.id)}
-              className="flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all cursor-pointer"
+              className="flex flex-col items-center gap-1.5 p-2 rounded-2xl border transition-all cursor-pointer hover:scale-105"
               style={{
-                background: isSelected ? `${idol.color}18` : 'rgba(0,0,0,0.28)',
-                borderColor: isSelected ? idol.color : 'rgba(100,50,0,0.28)',
-                boxShadow: isSelected ? `0 0 14px ${idol.color}30` : 'none',
+                background: isSelected ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.45)',
+                borderColor: isSelected ? '#b8860b' : 'rgba(201,162,39,0.3)',
+                boxShadow: isSelected ? '0 4px 15px rgba(184,134,11,0.25)' : 'none',
               }}
             >
               <div className="relative">
                 <DeityPhoto emoji={idol.emoji} name={idol.name} color={idol.color} size="sm" selected={isSelected} />
                 {isSelected && (
                   <div
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-                    style={{ background: idol.color, boxShadow: `0 0 6px ${idol.color}` }}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow"
+                    style={{ background: '#b8860b' }}
                   >
                     ✓
                   </div>
                 )}
               </div>
               <span
-                className="text-[10px] font-medium text-center leading-tight"
-                style={{ color: isSelected ? '#FFD080' : '#7a5010' }}
+                className="text-[10px] font-bold text-center leading-tight truncate w-full"
+                style={{ fontFamily: HEADING_FONT, color: isSelected ? '#6b5312' : '#8a7a55' }}
               >
                 {idol.name}
               </span>
@@ -305,7 +321,7 @@ function StepChooseIdols({ selected, onToggle, onBack, onNext }: {
       <div className="flex justify-between">
         <BackBtn onClick={onBack} />
         <PrimaryBtn onClick={onNext} disabled={selected.length === 0}>
-          Review →
+          Review & Enshrine →
         </PrimaryBtn>
       </div>
     </Card>
@@ -325,21 +341,21 @@ function StepReview({ userName, templeName, selectedIds, onBack, onDone }: {
   return (
     <Card>
       <div className="text-center mb-6">
-        <div className="text-5xl mb-3" style={{ filter: 'drop-shadow(0 0 12px rgba(255,160,0,0.5))' }}>🛕</div>
+        <div className="text-5xl mb-2" style={{ filter: 'drop-shadow(0 0 12px rgba(255,160,0,0.5))' }}>🛕</div>
         <h2
-          className="text-xl font-bold text-amber-100 mb-1"
-          style={{ fontFamily: "'Cinzel Decorative', serif", textShadow: '0 0 20px rgba(255,180,0,0.25)' }}
+          className="text-xl sm:text-2xl font-bold text-amber-950 mb-1"
+          style={{ fontFamily: DECO_FONT }}
         >
           {templeName}
         </h2>
-        <p className="text-amber-600/80 text-xs" style={{ fontFamily: "'Cinzel', serif" }}>
+        <p className="text-amber-700/80 text-xs font-semibold" style={{ fontFamily: HEADING_FONT }}>
           Devotee: {userName}
         </p>
       </div>
 
       <div className="mb-6">
-        <p className="text-amber-500/80 text-[10px] font-semibold tracking-[0.2em] uppercase text-center mb-3" style={{ fontFamily: "'Cinzel', serif" }}>
-          Your Deities ({idols.length})
+        <p className="text-amber-900 text-[10px] font-bold tracking-[0.2em] uppercase text-center mb-3" style={{ fontFamily: HEADING_FONT }}>
+          Enshrined Deities ({idols.length})
         </p>
         <div className="flex flex-wrap justify-center gap-3">
           {idols.map(idol => (
@@ -351,16 +367,16 @@ function StepReview({ userName, templeName, selectedIds, onBack, onDone }: {
       </div>
 
       <div
-        className="rounded-xl p-3 mb-5 text-center text-xs border"
-        style={{ background: 'rgba(0,0,0,0.25)', borderColor: 'rgba(180,100,0,0.2)', color: '#9a6520' }}
+        className="rounded-xl p-3 mb-6 text-center text-xs border bg-white/60"
+        style={{ borderColor: 'rgba(201,162,39,0.35)', color: '#7a5a1e', fontFamily: HEADING_FONT }}
       >
-        You can add or remove deities at any time after setup.
+        You can always add more deities or customize your 3D mandir anytime. 🙏
       </div>
 
       <div className="flex justify-between">
         <BackBtn onClick={onBack} />
         <PrimaryBtn onClick={onDone}>
-          Enter Temple 🛕
+          Enter Mandir 🛕
         </PrimaryBtn>
       </div>
     </Card>

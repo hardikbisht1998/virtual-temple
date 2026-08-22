@@ -4,10 +4,13 @@ import { OrbitControls } from '@react-three/drei';
 import { IDOLS } from '../data';
 import type { PlacedIdol } from '../types';
 import {
-  LAYOUT_KEY, DEFAULT_LAYOUT, FLOOR_RADII, loadLayout,
+  LAYOUT_KEY, DEFAULT_LAYOUT, FLOOR_RADII, loadLayout, snap, PRESETS,
   type Layout3D, type FloorConfig, type FloorShape, type DecorType, type DecorItem,
+  type ShellId, type MaterialId, type Preset,
 } from '../layout3d';
-import { MandirScene, DEITY_MODELS } from './MandirScene';
+import { MATERIALS } from '../materials/sets';
+import { MandirScene } from './MandirScene';
+import { DEITY_MODELS } from '../constants/models';
 
 const HEADING_FONT = "'Cinzel', serif";
 
@@ -45,7 +48,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
 
   const moveTo = useCallback((id: string, x: number, z: number) => {
     setLayout(l => {
-      const [cx, cz] = clampToFloor(x, z, FLOOR_RADII[l.floor.size], l.floor.shape);
+      const [cx, cz] = clampToFloor(snap(x), snap(z), FLOOR_RADII[l.floor.size], l.floor.shape);
       if (id.startsWith('decor:')) {
         const decorId = id.slice(6);
         return { ...l, decor: l.decor.map(d => d.id === decorId ? { ...d, pos: [cx, cz] } : d) };
@@ -68,12 +71,26 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
     });
   }, []);
 
-  const toggleHall = useCallback(() => {
-    setLayout(l => ({ ...l, hall: !l.hall }));
+  const setShell = useCallback((shell: ShellId) => {
+    setLayout(l => ({ ...l, shell }));
   }, []);
 
-  const toggleRoom = useCallback(() => {
-    setLayout(l => ({ ...l, room: !l.room }));
+  const setMaterial = useCallback((material: MaterialId) => {
+    setLayout(l => ({ ...l, material }));
+  }, []);
+
+  const applyPreset = useCallback((preset: Preset) => {
+    // A preset restyles the space; the devotee's murtis and decor stay put.
+    setLayout(l => {
+      const next = { ...l, ...preset.patch };
+      const r = FLOOR_RADII[next.floor.size];
+      const clamp = ([x, z]: [number, number]): [number, number] => clampToFloor(x, z, r, next.floor.shape);
+      return {
+        ...next,
+        positions: Object.fromEntries(Object.entries(l.positions).map(([k, p]) => [k, clamp(p)])),
+        decor: l.decor.map(d => ({ ...d, pos: clamp(d.pos) })),
+      };
+    });
   }, []);
 
   const toggleMandir = useCallback(() => {
@@ -141,9 +158,45 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
         <ToolBtn icon="◻️" label="Medium" active={layout.floor.size === 'medium'} onClick={() => setFloor({ size: 'medium' })} />
         <ToolBtn icon="⬜" label="Large"  active={layout.floor.size === 'large'}  onClick={() => setFloor({ size: 'large' })} />
         <div className="flex-1" />
-        <ToolBtn icon="📦" label="Cover" active={layout.room} onClick={toggleRoom} />
-        <ToolBtn icon="🏛️" label="Temple Hall" active={layout.hall} onClick={toggleHall} />
         <ToolBtn icon="🛕" label="Wood Mandir" active={layout.mandir} onClick={toggleMandir} />
+      </div>
+
+      {/* ── Shell + material: the composed space and its stone ── */}
+      <div
+        className="flex flex-wrap items-center gap-2 rounded-xl p-2.5"
+        style={{ background: 'rgba(255,255,255,0.72)', border: '1px solid rgba(176,180,190,0.6)', boxShadow: '0 2px 10px rgba(120,110,80,0.12)' }}
+      >
+        <span className="text-[10px] tracking-[0.2em] uppercase px-1" style={{ fontFamily: HEADING_FONT, color: '#b8860b' }}>
+          Shell:
+        </span>
+        <ToolBtn icon="🌌" label="Open"      active={layout.shell === 'open'}      onClick={() => setShell('open')} />
+        <ToolBtn icon="🚪" label="Room"      active={layout.shell === 'room'}      onClick={() => setShell('room')} />
+        <ToolBtn icon="🕯️" label="Niche"     active={layout.shell === 'niche'}     onClick={() => setShell('niche')} />
+        <ToolBtn icon="🏛️" label="Hall"      active={layout.shell === 'hall'}      onClick={() => setShell('hall')} />
+        <ToolBtn icon="🌙" label="Courtyard" active={layout.shell === 'courtyard'} onClick={() => setShell('courtyard')} />
+        <span className="w-px h-5 mx-1" style={{ background: 'rgba(176,180,190,0.6)' }} />
+        {(Object.keys(MATERIALS) as MaterialId[]).map(id => (
+          <ToolBtn
+            key={id}
+            icon={MATERIALS[id].icon}
+            label={MATERIALS[id].label}
+            active={layout.material === id}
+            onClick={() => setMaterial(id)}
+          />
+        ))}
+      </div>
+
+      {/* ── Presets: something beautiful in one tap, then customise ── */}
+      <div
+        className="flex flex-wrap items-center gap-2 rounded-xl p-2.5"
+        style={{ background: 'rgba(255,255,255,0.72)', border: '1px solid rgba(176,180,190,0.6)', boxShadow: '0 2px 10px rgba(120,110,80,0.12)' }}
+      >
+        <span className="text-[10px] tracking-[0.2em] uppercase px-1" style={{ fontFamily: HEADING_FONT, color: '#b8860b' }}>
+          Presets:
+        </span>
+        {PRESETS.map(preset => (
+          <ToolBtn key={preset.id} icon={preset.icon} label={preset.label} onClick={() => applyPreset(preset)} />
+        ))}
       </div>
 
       {/* ── Decor toolbar ──────────────────────────────────── */}
@@ -158,6 +211,8 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
         <ToolBtn icon="🏛️" label="Pillar"  onClick={() => addDecor('pillar')} />
         <ToolBtn icon="🌸" label="Flowers" onClick={() => addDecor('flowers')} />
         <ToolBtn icon="🌀" label="Rangoli" onClick={() => addDecor('rangoli')} />
+        <ToolBtn icon="🏺" label="Kalash"  onClick={() => addDecor('kalash')} />
+        <ToolBtn icon="🔔" label="Bells"   onClick={() => addDecor('bells')} />
         <ToolBtn icon="🕉" label="Murtis"  onClick={() => setShowPicker(p => !p)} />
         <div className="flex-1" />
         <ToolBtn icon="⟲" label="Rotate" onClick={() => rotateSelected(Math.PI / 6)}  disabled={!selected} />

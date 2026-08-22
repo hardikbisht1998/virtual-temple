@@ -1,16 +1,22 @@
-import { useMemo, useRef, Suspense } from 'react';
+import { useMemo, useRef, Suspense, useState, useEffect } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
-import { Stars, Html, useGLTF, Environment, Lightformer } from '@react-three/drei';
-import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
+import { Stars, Html, useGLTF, Environment } from '@react-three/drei';
+import { EffectComposer, Bloom, Vignette, N8AO } from '@react-three/postprocessing';
 import {
-  Box3, Vector3, DoubleSide, CanvasTexture, RepeatWrapping, SRGBColorSpace, AdditiveBlending,
+  Box3, Vector3, CanvasTexture, RepeatWrapping, SRGBColorSpace, AdditiveBlending, DoubleSide,
   type Object3D, type Mesh, type MeshStandardMaterial, type Group, type PointLight, type Points,
 } from 'three';
 import { IDOLS } from '../data';
 import type { PlacedIdol, Idol } from '../types';
-import { FLOOR_RADII, defaultIdolPos, type Layout3D, type FloorShape, type DecorItem } from '../layout3d';
-import shivaModelUrl from '../assets/shiva_-_hindu_god.glb?url';
-import ganeshaModelUrl from '../assets/lord_ganesha_3d_model__hindu_god_statue.glb?url';
+import { FLOOR_RADII, defaultIdolPos, type Layout3D, type DecorItem } from '../layout3d';
+import { DEITY_MODELS, DEITY_MODEL_ORIENT } from '../constants/models';
+import { Shell } from '../rooms/Shell';
+import { MATERIALS } from '../materials/sets';
+
+/* Decode Draco geometry from our own bundle rather than drei's default
+   Google CDN — the compressed murtis then load offline and the app keeps
+   no third-party runtime dependency. */
+useGLTF.setDecoderPath('/draco/');
 
 const HEADING_FONT = "'Cinzel', serif";
 
@@ -118,32 +124,101 @@ function woodTexture(): CanvasTexture {
   return _wood;
 }
 
-let _plaster: CanvasTexture | undefined;
-function plasterTexture(): CanvasTexture {
-  _plaster ??= paintTexture(256, (ctx, s) => {
-    ctx.fillStyle = '#f0ead9';
-    ctx.fillRect(0, 0, s, s);
-    // fine speckle
-    for (let i = 0; i < 2600; i++) {
-      const v = Math.floor(150 + Math.random() * 40);
-      ctx.fillStyle = `rgba(${v},${v - 8},${v - 26},${0.03 + Math.random() * 0.05})`;
-      ctx.fillRect(Math.random() * s, Math.random() * s, 1 + Math.random() * 2, 1 + Math.random() * 2);
-    }
-    // faint weathering stains
-    for (let i = 0; i < 6; i++) {
-      const x = Math.random() * s, y = Math.random() * s, r = 30 + Math.random() * 60;
-      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, 'rgba(160,148,120,0.06)');
-      g.addColorStop(1, 'rgba(160,148,120,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(x - r, y - r, r * 2, r * 2);
-    }
-  }, 3, 1);
-  return _plaster;
+
+
+
+/* Bump maps live in linear space — no SRGB tag, mid-grey base, features
+   darker/lighter. They give the marble veining and wood grain actual
+   relief under the key light, which is most of what "carved" looks like. */
+function paintLinearTexture(size: number, draw: (ctx: CanvasRenderingContext2D, s: number) => void, repeatX = 1, repeatY = 1): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  draw(canvas.getContext('2d')!, size);
+  const tex = new CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = RepeatWrapping;
+  tex.repeat.set(repeatX, repeatY);
+  return tex;
 }
 
-function PlasterMat({ tint = '#efe8d9' }: { tint?: string }) {
-  return <meshStandardMaterial map={plasterTexture()} color={tint} roughness={0.62} metalness={0.03} />;
+let _marbleBump: CanvasTexture | undefined;
+function marbleBumpTexture(): CanvasTexture {
+  _marbleBump ??= paintLinearTexture(512, (ctx, s) => {
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, s, s);
+    for (let v = 0; v < 26; v++) {
+      let x = Math.random() * s, y = Math.random() * s, a = Math.random() * Math.PI * 2;
+      ctx.strokeStyle = `rgba(40,40,40,${0.25 + Math.random() * 0.25})`;
+      ctx.lineWidth = 0.8 + Math.random() * 1.6;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (let k = 0; k < 70; k++) {
+        a += (Math.random() - 0.5) * 0.8;
+        x += Math.cos(a) * 5;
+        y += Math.sin(a) * 5;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  });
+  return _marbleBump;
+}
+
+let _woodBump: CanvasTexture | undefined;
+function woodBumpTexture(): CanvasTexture {
+  _woodBump ??= paintLinearTexture(512, (ctx, s) => {
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < 220; i++) {
+      const x0 = Math.random() * s;
+      const amp = 2 + Math.random() * 6, ph = Math.random() * Math.PI * 2;
+      const deep = Math.random() > 0.5;
+      ctx.strokeStyle = deep ? `rgba(30,30,30,${0.2 + Math.random() * 0.3})` : `rgba(210,210,210,${0.15 + Math.random() * 0.2})`;
+      ctx.lineWidth = 0.6 + Math.random() * 2;
+      ctx.beginPath();
+      for (let y = 0; y <= s; y += 8) {
+        const x = x0 + Math.sin(y / 46 + ph) * amp;
+        if (y === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  });
+  return _woodBump;
+}
+
+/* Jali screen: an alpha-tested lattice of diamond piercings. Solid where
+   white, pierced where black — so the panel is real carved geometry to the
+   light and casts a perforated shadow instead of a wireframe's solid one. */
+let _jali: CanvasTexture | undefined;
+function jaliTexture(): CanvasTexture {
+  if (_jali) return _jali;
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, size, size);
+  const cols = 9, rows = 12, cw = size / cols, rh = size / rows;
+  ctx.fillStyle = '#000000';
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      const cx = (i + 0.5) * cw, cy = (j + 0.5) * rh;
+      const w = cw * 0.62, h = rh * 0.62;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - h / 2);
+      ctx.lineTo(cx + w / 2, cy);
+      ctx.lineTo(cx, cy + h / 2);
+      ctx.lineTo(cx - w / 2, cy);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  // solid border frame
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 26;
+  ctx.strokeRect(0, 0, size, size);
+  const tex = new CanvasTexture(canvas);
+  _jali = tex;
+  return tex;
 }
 
 /* ── Living light ────────────────────────────────────────────────
@@ -248,12 +323,6 @@ function Moon() {
   );
 }
 
-/* Deities with a real 3D model in assets — everyone else gets the procedural statue */
-export const DEITY_MODELS: Record<string, string> = {
-  shiva: shivaModelUrl,
-  ganesha: ganeshaModelUrl,
-};
-
 /* ── Shared mandir scene ─────────────────────────────────────────
    Everything inside the Canvas: sky, lights, architecture, murtis,
    decorations. Temple3D wraps it with OrbitControls + drag editing;
@@ -270,6 +339,46 @@ export interface MandirSceneProps {
   onFloorUp?: () => void;
 }
 
+
+/* ── Time of day ─────────────────────────────────────────────────
+   Real puja happens at set times, so the scene's sky follows the actual
+   clock: a morning puja looks like morning, an evening aarti like dusk.
+   Set localStorage vt-debug-hour to preview a specific hour. */
+interface DayPhase {
+  sky: string;
+  keyColor: string;
+  keyIntensity: number;
+  keyPos: [number, number, number];
+  ambient: number;
+  night: boolean;       // stars + moon
+  envIntensity: number;
+}
+
+function getDayPhase(hour: number): DayPhase {
+  if (hour >= 5 && hour < 8)   // dawn — rose-gold, low sun from the east
+    return { sky: '#8a5f70', keyColor: '#ffc9a0', keyIntensity: 1.6, keyPos: [14, 6, 4], ambient: 0.34, night: false, envIntensity: 0.5 };
+  if (hour >= 8 && hour < 17)  // day — pale lavender-blue, high neutral sun
+    return { sky: '#93a0c4', keyColor: '#fff4e0', keyIntensity: 2.3, keyPos: [8, 18, 9], ambient: 0.5, night: false, envIntensity: 0.7 };
+  if (hour >= 17 && hour < 20) // dusk — the warm hour of the evening aarti
+    return { sky: '#5c4460', keyColor: '#ffb070', keyIntensity: 1.5, keyPos: [-13, 7, 5], ambient: 0.3, night: false, envIntensity: 0.55 };
+  // night — the deep-violet devotional sky
+  return { sky: '#4a3d5c', keyColor: '#ffe4b8', keyIntensity: 1.4, keyPos: [8, 14, 9], ambient: 0.3, night: true, envIntensity: 0.55 };
+}
+
+function useDayPhase(): DayPhase {
+  const read = () => {
+    const dbg = Number(localStorage.getItem('vt-debug-hour'));
+    const hour = Number.isFinite(dbg) && localStorage.getItem('vt-debug-hour') !== null ? dbg : new Date().getHours();
+    return getDayPhase(hour);
+  };
+  const [phase, setPhase] = useState<DayPhase>(read);
+  useEffect(() => {
+    const id = setInterval(() => setPhase(read()), 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+  return phase;
+}
+
 export function MandirScene({
   layout, placedIdols, selected = null, dragId = null, showLabels = true,
   onItemDown, onFloorMove, onFloorUp,
@@ -277,12 +386,21 @@ export function MandirScene({
   const radius = FLOOR_RADII[layout.floor.size];
 
   // Floor marble tiled to the room size (clone shares the painted canvas)
+  const floorBump = useMemo(() => {
+    const t = marbleBumpTexture().clone();
+    t.repeat.set(radius / 4, radius / 4);
+    t.needsUpdate = true;
+    return t;
+  }, [radius]);
+
   const floorTex = useMemo(() => {
     const t = marbleTexture().clone();
     t.repeat.set(radius / 4, radius / 4);
     t.needsUpdate = true;
     return t;
   }, [radius]);
+
+  const day = useDayPhase();
 
   const idolEntries = useMemo(() => {
     const n = placedIdols.length;
@@ -296,18 +414,18 @@ export function MandirScene({
 
   return (
     <>
-      <color attach="background" args={['#4a3d5c']} />
-      <fog attach="fog" args={['#4a3d5c', 24, 75]} />
+      <color attach="background" args={[day.sky]} />
+      <fog attach="fog" args={[day.sky, 24, 75]} />
 
       {/* Lighting — low ambient + hemisphere so forms get modelled, one
          shadow-casting key light, warm fills */}
-      <ambientLight intensity={0.22} color="#ffd9a0" />
-      <hemisphereLight args={['#8f7cc9', '#4a3520', 0.45]} />
+      <ambientLight intensity={day.ambient} color="#eef0ff" />
+      <hemisphereLight args={['#b9c4f0', '#4a4038', 0.7]} />
       <directionalLight
         castShadow
-        position={[8, 14, 9]}
-        intensity={1.4}
-        color="#ffe4b8"
+        position={day.keyPos}
+        intensity={day.keyIntensity}
+        color={day.keyColor}
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0004}
         shadow-camera-left={-24}
@@ -317,26 +435,25 @@ export function MandirScene({
         shadow-camera-near={1}
         shadow-camera-far={50}
       />
-      <FlickerLight position={[0, 6, -6]} intensity={34} color="#ff9d3c" />
+      <FlickerLight position={[0, 6, -6]} intensity={22} color="#ff9d3c" />
       <FlickerLight position={[0, 4, 6]} intensity={16} color="#ffb066" />
       {/* Cool moonlight rim from the front-left balances the firelight */}
-      <directionalLight position={[-10, 8, 12]} intensity={0.4} color="#8a94d8" />
+      <directionalLight position={[-10, 8, 12]} intensity={0.75} color="#8fa0e8" />
 
       {/* Procedural environment map (no HDR download) — gives the copper,
          gold and marble something to reflect so they stop looking flat */}
-      <Environment resolution={64}>
-        <Lightformer intensity={2.4} position={[0, 7, -9]} scale={[12, 5, 1]} color="#ffb066" />
-        <Lightformer intensity={1.2} position={[-9, 4, 2]} rotation-y={Math.PI / 2} scale={[8, 4, 1]} color="#8f7cc9" />
-        <Lightformer intensity={1.2} position={[9, 4, 2]} rotation-y={-Math.PI / 2} scale={[8, 4, 1]} color="#c9b27c" />
-        <Lightformer intensity={1.6} position={[0, 10, 4]} rotation-x={Math.PI / 2} scale={[10, 8, 1]} color="#fff1d6" />
-      </Environment>
+      {/* Real HDR environment. The procedural Lightformer rig this replaced kept
+         every surface in the same amber and gave metals nothing true to reflect;
+         a 1k HDR costs ~1.4MB and is what makes carved stone read as carved. */}
+      <Suspense fallback={null}>
+        <Environment files="/hdr/dusk_1k.hdr" environmentIntensity={day.envIntensity} />
+      </Suspense>
 
-      <Stars radius={60} depth={40} count={1400} factor={3} saturation={0.4} fade speed={0.6} />
-      <Moon />
+      {day.night && <Stars radius={60} depth={40} count={1400} factor={3} saturation={0.4} fade speed={0.6} />}
+      {day.night && <Moon />}
       <Motes radius={radius} />
 
-      {layout.room && <Sanctum radius={radius} shape={layout.floor.shape} />}
-      {layout.hall && <TempleHall radius={radius} />}
+      <Shell shell={layout.shell} material={layout.material} radius={radius} shape={layout.floor.shape} />
       {layout.mandir && <WoodenMandir />}
 
       {/* Floor — also the drag surface */}
@@ -351,7 +468,7 @@ export function MandirScene({
         {layout.floor.shape === 'square'
           ? <planeGeometry args={[radius * 2, radius * 2]} />
           : <circleGeometry args={[radius, layout.floor.shape === 'hex' ? 6 : 64]} />}
-        <meshPhysicalMaterial map={floorTex} color="#e6dfd0" roughness={0.32} metalness={0.04} clearcoat={0.55} clearcoatRoughness={0.35} envMapIntensity={0.7} />
+        <meshPhysicalMaterial map={floorTex} bumpMap={floorBump} bumpScale={0.35} color={MATERIALS[layout.material].floorTint} roughness={0.32} metalness={0.04} clearcoat={0.55} clearcoatRoughness={0.35} envMapIntensity={0.7} />
       </mesh>
       {layout.floor.shape === 'square' ? (
         <mesh key={`border-sq-${layout.floor.size}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
@@ -398,7 +515,9 @@ export function MandirScene({
       {/* Post-processing: bloom makes flames/gold genuinely glow; a soft
          vignette frames the night scene */}
       <EffectComposer>
-        <Bloom mipmapBlur intensity={0.55} luminanceThreshold={0.9} luminanceSmoothing={0.2} />
+        {/* Contact shadows in the creases — carving and drapery have no depth without it */}
+        <N8AO aoRadius={0.55} distanceFalloff={0.8} intensity={2.6} quality="medium" halfRes />
+        <Bloom mipmapBlur intensity={0.3} luminanceThreshold={0.97} luminanceSmoothing={0.3} />
         <Vignette eskil={false} offset={0.25} darkness={0.45} />
       </EffectComposer>
     </>
@@ -406,217 +525,6 @@ export function MandirScene({
 }
 
 /* ── Temple architecture ─────────────────────────────────────── */
-
-/* Enclosure that follows the floor shape, top always open:
-   square → back + side walls, front open
-   hex    → walls on the 3 rear edges, 3 front edges open
-   circle → curved wall around the back half of the circumference */
-const WALL_H = 7;
-const WALL_T = 0.3;
-
-function Sanctum({ radius, shape }: { radius: number; shape: FloorShape }) {
-  return (
-    <group onUpdate={enableShadows}>
-      {/* Base plinth under the whole room */}
-      {shape === 'square' ? (
-        <mesh position={[0, -0.17, 0]}>
-          <boxGeometry args={[radius * 2 + 1.4, 0.3, radius * 2 + 1.4]} />
-          <meshStandardMaterial color="#8f887a" roughness={0.8} />
-        </mesh>
-      ) : (
-        <mesh position={[0, -0.17, 0]} rotation={[0, shape === 'hex' ? Math.PI / 2 : 0, 0]}>
-          <cylinderGeometry args={[radius + 0.7, radius + 0.7, 0.3, shape === 'hex' ? 6 : 48]} />
-          <meshStandardMaterial color="#8f887a" roughness={0.8} />
-        </mesh>
-      )}
-
-      {shape === 'square' && <SquareWalls half={radius} />}
-      {shape === 'hex'    && <HexWalls radius={radius} />}
-      {shape === 'circle' && <CircleWall radius={radius} />}
-
-      {/* Warm light high in the room so the interior stays inviting */}
-      <FlickerLight position={[0, WALL_H - 1.2, 0]} intensity={35} distance={radius * 2.5} color="#ffb066" />
-    </group>
-  );
-}
-
-function GoldMat() {
-  return <meshStandardMaterial color="#e9b438" metalness={0.6} roughness={0.35} emissive="#7a4500" emissiveIntensity={0.4} />;
-}
-
-function SquareWalls({ half }: { half: number }) {
-  const H = WALL_H, T = WALL_T;
-  const W = half * 2 + 0.6;
-  return (
-    <group>
-      {/* Back wall */}
-      <mesh position={[0, H / 2, -half - T / 2]}>
-        <boxGeometry args={[W, H, T]} />
-        <PlasterMat />
-      </mesh>
-      {/* Side walls */}
-      <mesh position={[-half - T / 2, H / 2, 0]}>
-        <boxGeometry args={[T, H, W]} />
-        <PlasterMat tint="#e6dfcf" />
-      </mesh>
-      <mesh position={[half + T / 2, H / 2, 0]}>
-        <boxGeometry args={[T, H, W]} />
-        <PlasterMat tint="#e6dfcf" />
-      </mesh>
-
-      {/* Open top — gold rim capping the walls */}
-      <mesh position={[0, H + 0.08, -half - T / 2]}>
-        <boxGeometry args={[W, 0.16, T + 0.14]} />
-        <GoldMat />
-      </mesh>
-      <mesh position={[-half - T / 2, H + 0.08, 0]}>
-        <boxGeometry args={[T + 0.14, 0.16, W]} />
-        <GoldMat />
-      </mesh>
-      <mesh position={[half + T / 2, H + 0.08, 0]}>
-        <boxGeometry args={[T + 0.14, 0.16, W]} />
-        <GoldMat />
-      </mesh>
-
-      {/* Gold trim where the walls meet the floor */}
-      <mesh position={[0, 0.12, -half + 0.1]}>
-        <boxGeometry args={[half * 2, 0.24, 0.12]} />
-        <GoldMat />
-      </mesh>
-      <mesh position={[-half + 0.1, 0.12, 0]}>
-        <boxGeometry args={[0.12, 0.24, half * 2]} />
-        <GoldMat />
-      </mesh>
-      <mesh position={[half - 0.1, 0.12, 0]}>
-        <boxGeometry args={[0.12, 0.24, half * 2]} />
-        <GoldMat />
-      </mesh>
-    </group>
-  );
-}
-
-/* Hexagon: floor corners sit at 0°, 60°, …; the 3 rear edges (midpoints at
-   30°, 90°, 150° in floor-plane angle, i.e. world z < 0) get walls. */
-function HexWalls({ radius }: { radius: number }) {
-  const H = WALL_H, T = WALL_T;
-  const apothem = radius * Math.cos(Math.PI / 6);
-  const edges = [30, 90, 150].map(deg => {
-    const th = (deg * Math.PI) / 180;
-    const d = apothem + T / 2;
-    return { x: d * Math.cos(th), z: -d * Math.sin(th), rotY: th - Math.PI / 2 };
-  });
-  return (
-    <group>
-      {edges.map((e, i) => (
-        <group key={i} position={[e.x, 0, e.z]} rotation={[0, e.rotY, 0]}>
-          <mesh position={[0, H / 2, 0]}>
-            <boxGeometry args={[radius * 1.04, H, T]} />
-            <PlasterMat tint="#e9e2d2" />
-          </mesh>
-          {/* Gold rim on top */}
-          <mesh position={[0, H + 0.08, 0]}>
-            <boxGeometry args={[radius * 1.04, 0.16, T + 0.14]} />
-            <GoldMat />
-          </mesh>
-          {/* Gold trim at the base */}
-          <mesh position={[0, 0.12, 0]}>
-            <boxGeometry args={[radius * 1.02, 0.24, T + 0.1]} />
-            <GoldMat />
-          </mesh>
-        </group>
-      ))}
-    </group>
-  );
-}
-
-/* Circle: one curved wall covering the rear half of the circumference */
-function CircleWall({ radius }: { radius: number }) {
-  const H = WALL_H;
-  const r = radius + 0.15;
-  return (
-    <group>
-      <mesh position={[0, H / 2, 0]}>
-        <cylinderGeometry args={[r, r, H, 48, 1, true, Math.PI / 2, Math.PI]} />
-        <meshStandardMaterial map={plasterTexture()} color="#e9e2d2" roughness={0.62} metalness={0.03} side={DoubleSide} />
-      </mesh>
-      {/* Gold rim on top */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, H + 0.08, 0]}>
-        <torusGeometry args={[r, 0.1, 8, 48, Math.PI]} />
-        <GoldMat />
-      </mesh>
-      {/* Gold trim at the base */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.12, 0]}>
-        <torusGeometry args={[r - 0.1, 0.08, 8, 48, Math.PI]} />
-        <GoldMat />
-      </mesh>
-    </group>
-  );
-}
-
-function TempleHall({ radius }: { radius: number }) {
-  const columns = useMemo(() => {
-    const arr: [number, number][] = [];
-    for (let i = 0; i < 7; i++) {
-      const a = Math.PI * (0.12 + (0.76 * i) / 6) + Math.PI; // rear semicircle
-      arr.push([Math.cos(a) * (radius - 1.2), Math.sin(a) * -(radius - 1.2)]);
-    }
-    return arr;
-  }, [radius]);
-
-  return (
-    <group onUpdate={enableShadows}>
-      {columns.map(([x, z], i) => (
-        <group key={i} position={[x, 0, z]}>
-          <mesh position={[0, 0.15, 0]}>
-            <cylinderGeometry args={[0.55, 0.65, 0.3, 16]} />
-            <meshStandardMaterial color="#b6ae9c" roughness={0.65} />
-          </mesh>
-          <mesh position={[0, 2.4, 0]}>
-            <cylinderGeometry args={[0.38, 0.44, 4.5, 16]} />
-            <meshStandardMaterial map={marbleTexture()} color="#e9e2d2" roughness={0.45} metalness={0.08} />
-          </mesh>
-          <mesh position={[0, 4.75, 0]}>
-            <boxGeometry args={[1.1, 0.35, 1.1]} />
-            <meshStandardMaterial color="#d8b23a" roughness={0.4} metalness={0.5} />
-          </mesh>
-          {/* Column flame sconce */}
-          <group position={[0, 4.95, 0]}>
-            <Flame scale={1.2} />
-          </group>
-        </group>
-      ))}
-
-      {/* Grand arch behind the altar */}
-      <group position={[0, 0, -(radius - 1.5)]}>
-        <mesh position={[0, 3.2, 0]}>
-          <torusGeometry args={[3.4, 0.16, 12, 48, Math.PI]} />
-          <meshStandardMaterial color="#e9b438" roughness={0.35} metalness={0.6} emissive="#7a4500" emissiveIntensity={0.4} />
-        </mesh>
-        <mesh position={[-3.4, 1.6, 0]}>
-          <cylinderGeometry args={[0.16, 0.2, 3.2, 12]} />
-          <meshStandardMaterial color="#e9b438" roughness={0.35} metalness={0.6} />
-        </mesh>
-        <mesh position={[3.4, 1.6, 0]}>
-          <cylinderGeometry args={[0.16, 0.2, 3.2, 12]} />
-          <meshStandardMaterial color="#e9b438" roughness={0.35} metalness={0.6} />
-        </mesh>
-        {/* Kalash on top */}
-        <mesh position={[0, 6.85, 0]}>
-          <sphereGeometry args={[0.3, 16, 12]} />
-          <meshStandardMaterial color="#e9b438" metalness={0.7} roughness={0.3} />
-        </mesh>
-        <group position={[0, 7.05, 0]}>
-          <Flame />
-        </group>
-        <Html center position={[0, 3.4, 0.2]} zIndexRange={[0, 0]}>
-          <div style={{ fontSize: 34, color: '#ffcf70', textShadow: '0 0 18px rgba(255,150,0,0.9)', fontFamily: 'serif', userSelect: 'none', pointerEvents: 'none' }}>
-            ॐ
-          </div>
-        </Html>
-      </group>
-    </group>
-  );
-}
 
 /* ── Carved wooden mandir ────────────────────────────────────────
    Modelled on assets/templestructure.jpg: a copper-toned carved
@@ -631,6 +539,25 @@ const PLATFORM_TOP = 1.14;  // deity platform height
 const BEAM_Y = 5.35;        // underside of the cornice
 const ROOF_Y = BEAM_Y + 0.56; // top of the cornice — domes sit here
 
+/* World-space base of a placed murti — where its pedestal meets the platform.
+   Exported so the darshan view can position a camera in front of a deity
+   using exactly the placement maths the scene itself uses. */
+export function murtiAnchor(
+  layout: Layout3D,
+  placedIdols: PlacedIdol[],
+  instanceId: string,
+): [number, number, number] | null {
+  const i = placedIdols.findIndex(p => p.instanceId === instanceId);
+  if (i < 0) return null;
+  const [x, z] = layout.positions[instanceId] ?? defaultIdolPos(i, placedIdols.length);
+  return [x, layout.mandir ? mandirLift(x, z) : 0, z];
+}
+
+/* Eye level of the murti's face above its base, and of a standing devotee. */
+export const PEDESTAL_TOP = 0.56;
+export const MURTI_EYE = PEDESTAL_TOP + 1.95;
+export const DEVOTEE_EYE = 1.62;
+
 function mandirLift(x: number, z: number): number {
   const inside =
     Math.abs(x) <= MANDIR_HALF_W - 0.9 &&
@@ -642,8 +569,8 @@ function mandirLift(x: number, z: number): number {
    multiplies under the copper tint so it reads as lacquered carved wood */
 function CopperMat({ bright = false }: { bright?: boolean }) {
   return bright
-    ? <meshStandardMaterial map={woodTexture()} color="#f0a860" metalness={0.6} roughness={0.3} emissive="#5a2405" emissiveIntensity={0.25} envMapIntensity={1.3} />
-    : <meshStandardMaterial map={woodTexture()} color="#c97a3e" metalness={0.45} roughness={0.42} emissive="#3a1a05" emissiveIntensity={0.18} envMapIntensity={1.1} />;
+    ? <meshStandardMaterial map={woodTexture()} bumpMap={woodBumpTexture()} bumpScale={0.18} color="#f0a860" metalness={0.6} roughness={0.3} emissive="#5a2405" emissiveIntensity={0.25} envMapIntensity={1.3} />
+    : <meshStandardMaterial map={woodTexture()} bumpMap={woodBumpTexture()} bumpScale={0.18} color="#c97a3e" metalness={0.45} roughness={0.42} emissive="#3a1a05" emissiveIntensity={0.18} envMapIntensity={1.1} />;
 }
 
 function WoodenMandir() {
@@ -707,11 +634,21 @@ function WoodenMandir() {
         </mesh>
       ))}
 
-      {/* Jali lattice side panels (wireframe grid reads as carved screen) */}
+      {/* Jali side screens — pierced lattice panels. alphaTest carves the
+         diamond openings out of a solid plane, so light passes through the
+         piercings and the shadow it casts is perforated, not a solid wall. */}
       {[-1, 1].map(s => (
-        <mesh key={s} position={[s * (MANDIR_HALF_W - 0.35), PLATFORM_TOP + openH / 2, 0.1]} rotation={[0, Math.PI / 2, 0]}>
-          <planeGeometry args={[D - 1.4, openH - 0.4, 5, 7]} />
-          <meshStandardMaterial color="#d98a4b" wireframe metalness={0.5} roughness={0.4} />
+        <mesh key={s} position={[s * (MANDIR_HALF_W - 0.35), PLATFORM_TOP + openH / 2, 0.1]} rotation={[0, Math.PI / 2, 0]} castShadow receiveShadow>
+          <planeGeometry args={[D - 1.4, openH - 0.4]} />
+          <meshStandardMaterial
+            map={woodTexture()}
+            color="#d98a4b"
+            alphaMap={jaliTexture()}
+            alphaTest={0.5}
+            side={DoubleSide}
+            metalness={0.35}
+            roughness={0.5}
+          />
         </mesh>
       ))}
 
@@ -757,7 +694,7 @@ function WoodenMandir() {
       <Shikhara x={3.6} scale={0.85} />
 
       {/* Warm light inside the sanctum */}
-      <FlickerLight position={[0, 3.6, 0.5]} intensity={26} distance={12} color="#ffb066" />
+      <FlickerLight position={[0, 3.9, 0.9]} intensity={13} distance={11} color="#ffbe80" />
     </group>
   );
 }
@@ -866,7 +803,7 @@ function Murti({ idol, hasGarland, position, baseY = 0, showLabel = true, rotati
       {/* Statue — real 3D model when we have one, procedural otherwise */}
       {DEITY_MODELS[idol.id] ? (
         <Suspense fallback={<StatueBody idol={idol} dragging={dragging} selected={selected} />}>
-          <DeityModel url={DEITY_MODELS[idol.id]} />
+          <DeityModel url={DEITY_MODELS[idol.id]} orientY={DEITY_MODEL_ORIENT[idol.id] ?? 0} />
         </Suspense>
       ) : (
         <StatueBody idol={idol} dragging={dragging} selected={selected} />
@@ -876,7 +813,7 @@ function Murti({ idol, hasGarland, position, baseY = 0, showLabel = true, rotati
       {hasGarland && (
         <mesh position={[0, 1.62, 0.12]} rotation={[0.5, 0, 0]}>
           <torusGeometry args={[0.4, 0.07, 8, 24]} />
-          <meshStandardMaterial color="#f58bb4" emissive="#e8447a" emissiveIntensity={0.5} roughness={0.7} />
+          <meshStandardMaterial color="#f58bb4" emissive="#e8447a" emissiveIntensity={0.28} roughness={0.7} />
         </mesh>
       )}
 
@@ -909,41 +846,181 @@ function Murti({ idol, hasGarland, position, baseY = 0, showLabel = true, rotati
 
 /* Procedural statue used for deities without a real 3D model */
 function StatueBody({ idol, dragging, selected }: { idol: Idol; dragging: boolean; selected: boolean }) {
+  const gold  = <meshStandardMaterial color="#d9a441" metalness={0.75} roughness={0.28} />;
+  const skin  = <meshStandardMaterial color="#c9a882" roughness={0.55} metalness={0.1} />;
+  const cloth = (
+    <meshStandardMaterial
+      color={idol.color}
+      roughness={0.62}
+      metalness={0.08}
+      emissive={idol.color}
+      emissiveIntensity={dragging ? 0.22 : 0.05}
+    />
+  );
+
+  /* One arm: upper arm angled out from the shoulder, forearm forward, hand at the end.
+     Four arms read unmistakably as a Hindu murti where two would read as a doll. */
+  const arm = (side: 1 | -1, raised: boolean) => (
+    <group position={[side * 0.22, 1.6, raised ? -0.08 : 0.08]}>
+      <group rotation={[0, 0, side * (raised ? -1.15 : -0.5)]}>
+        {/* upper arm, angled down and out from the shoulder */}
+        <mesh position={[side * 0.15, -0.11, 0]} rotation={[0, 0, side * 0.55]}>
+          <capsuleGeometry args={[0.058, 0.24, 6, 12]} />
+          {skin}
+        </mesh>
+        {/* forearm, brought forward toward the devotee */}
+        <mesh position={[side * 0.29, raised ? -0.02 : -0.34, 0.07]} rotation={[0.35, 0, side * 0.15]}>
+          <capsuleGeometry args={[0.05, 0.22, 6, 12]} />
+          {skin}
+        </mesh>
+        {/* hand */}
+        <mesh position={[side * 0.32, raised ? 0.12 : -0.48, 0.12]} scale={[1, 1.15, 0.7]}>
+          <sphereGeometry args={[0.062, 10, 8]} />
+          {skin}
+        </mesh>
+        {/* armlet */}
+        <mesh position={[side * 0.19, -0.16, 0]} rotation={[0, 0, Math.PI / 2 + side * 0.55]}>
+          <torusGeometry args={[0.062, 0.018, 6, 14]} />
+          {gold}
+        </mesh>
+      </group>
+    </group>
+  );
+
   return (
     <group>
-      {/* Body (robe) */}
-      <mesh position={[0, 1.28, 0]}>
-        <capsuleGeometry args={[0.44, 0.85, 8, 20]} />
-        <meshStandardMaterial color={idol.color} roughness={0.5} metalness={0.18} emissive={idol.color} emissiveIntensity={dragging ? 0.35 : 0.12} />
+      {/* Lotus seat */}
+      {Array.from({ length: 12 }).map((_, i) => {
+        const a = (i / 12) * Math.PI * 2;
+        return (
+          <mesh key={i} position={[Math.cos(a) * 0.62, 0.63, Math.sin(a) * 0.62]} rotation={[0.5, -a, 0]} scale={[1, 0.4, 1]}>
+            <sphereGeometry args={[0.15, 8, 6]} />
+            <meshStandardMaterial color="#e8d5b0" roughness={0.6} />
+          </mesh>
+        );
+      })}
+
+      {/* Crossed legs / lower garment — wide base is what makes it read as seated */}
+      <mesh position={[0, 0.92, 0]}>
+        <cylinderGeometry args={[0.44, 0.8, 0.56, 24]} />
+        {cloth}
+      </mesh>
+      {/* Knees */}
+      <mesh position={[-0.5, 0.78, 0.16]} scale={[1.25, 0.7, 1]}>
+        <sphereGeometry args={[0.24, 12, 10]} />
+        {cloth}
+      </mesh>
+      <mesh position={[0.5, 0.78, 0.16]} scale={[1.25, 0.7, 1]}>
+        <sphereGeometry args={[0.24, 12, 10]} />
+        {cloth}
+      </mesh>
+      {/* Sash across the waist */}
+      <mesh position={[0, 1.2, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.42, 0.05, 8, 26]} />
+        {gold}
       </mesh>
 
-      {/* Necklace */}
-      <mesh position={[0, 1.85, 0.05]} rotation={[0.4, 0, 0]}>
-        <torusGeometry args={[0.26, 0.035, 8, 24]} />
-        <meshStandardMaterial color="#e9b438" metalness={0.7} roughness={0.3} />
+      {/* Torso */}
+      <mesh position={[0, 1.44, 0]}>
+        <cylinderGeometry args={[0.3, 0.42, 0.5, 20]} />
+        {skin}
+      </mesh>
+      {/* Shoulders */}
+      <mesh position={[0, 1.66, 0]} scale={[1.32, 0.72, 1]}>
+        <sphereGeometry args={[0.26, 16, 12]} />
+        {skin}
+      </mesh>
+      {/* Angavastram draped over one shoulder and across the chest */}
+      <mesh position={[-0.16, 1.6, 0.02]} rotation={[0, 0, 0.42]} scale={[1, 1, 0.55]}>
+        <capsuleGeometry args={[0.1, 0.34, 6, 12]} />
+        {cloth}
+      </mesh>
+      <mesh position={[0.05, 1.36, 0.14]} rotation={[0, 0, -0.5]} scale={[1, 1, 0.4]}>
+        <capsuleGeometry args={[0.075, 0.4, 6, 12]} />
+        {cloth}
       </mesh>
 
-      {/* Head */}
-      <mesh position={[0, 2.18, 0]}>
-        <sphereGeometry args={[0.31, 20, 16]} />
-        <meshStandardMaterial color="#e8b46a" roughness={0.45} metalness={0.25} />
+      {arm(1, false)}
+      {arm(-1, false)}
+      {arm(1, true)}
+      {arm(-1, true)}
+
+      {/* Necklaces */}
+      <mesh position={[0, 1.62, 0.04]} rotation={[0.35, 0, 0]}>
+        <torusGeometry args={[0.22, 0.028, 8, 24]} />
+        {gold}
+      </mesh>
+      <mesh position={[0, 1.52, 0.05]} rotation={[0.35, 0, 0]}>
+        <torusGeometry args={[0.3, 0.022, 8, 24]} />
+        {gold}
       </mesh>
 
-      {/* Crown */}
-      <mesh position={[0, 2.6, 0]}>
-        <coneGeometry args={[0.24, 0.45, 12]} />
-        <meshStandardMaterial color="#e9b438" metalness={0.65} roughness={0.3} />
+      {/* Neck + head */}
+      <mesh position={[0, 1.85, 0]}>
+        <cylinderGeometry args={[0.1, 0.12, 0.14, 12]} />
+        {skin}
       </mesh>
-      <mesh position={[0, 2.85, 0]}>
-        <sphereGeometry args={[0.06, 8, 8]} />
-        <meshStandardMaterial color="#d8332a" emissive="#d8332a" emissiveIntensity={0.8} />
+      <mesh position={[0, 2.04, 0]} scale={[1, 1.15, 1.02]}>
+        <sphereGeometry args={[0.23, 20, 16]} />
+        {skin}
+      </mesh>
+      {/* Ears */}
+      <mesh position={[-0.22, 2.03, 0]} scale={[0.5, 1, 0.6]}>
+        <sphereGeometry args={[0.07, 8, 8]} />
+        {skin}
+      </mesh>
+      <mesh position={[0.22, 2.03, 0]} scale={[0.5, 1, 0.6]}>
+        <sphereGeometry args={[0.07, 8, 8]} />
+        {skin}
+      </mesh>
+      {/* Tilak */}
+      <mesh position={[0, 2.12, 0.215]}>
+        <sphereGeometry args={[0.022, 8, 8]} />
+        <meshStandardMaterial color="#c4302b" roughness={0.5} />
       </mesh>
 
-      {/* Halo */}
-      <mesh position={[0, 2.25, -0.32]}>
-        <torusGeometry args={[0.5, 0.035, 8, 40]} />
-        <meshStandardMaterial color="#1a0a00" emissive={idol.color} emissiveIntensity={selected ? 3 : 1.8} />
+      {/* Mukut (crown): band, tapered tier, finial */}
+      <mesh position={[0, 2.24, 0]}>
+        <cylinderGeometry args={[0.235, 0.245, 0.1, 16]} />
+        {gold}
       </mesh>
+      <mesh position={[0, 2.42, 0]}>
+        <cylinderGeometry args={[0.11, 0.22, 0.3, 16]} />
+        {gold}
+      </mesh>
+      <mesh position={[0, 2.62, 0]}>
+        <sphereGeometry args={[0.07, 12, 10]} />
+        {gold}
+      </mesh>
+      <mesh position={[0, 2.73, 0]}>
+        <coneGeometry args={[0.035, 0.13, 10]} />
+        {gold}
+      </mesh>
+
+      {/* Prabhavali — halo arch behind the murti, with rays */}
+      <mesh position={[0, 2.0, -0.34]}>
+        <torusGeometry args={[0.6, 0.035, 8, 44]} />
+        <meshStandardMaterial
+          color="#8a6a1f"
+          metalness={0.6}
+          roughness={0.35}
+          emissive={idol.color}
+          emissiveIntensity={selected ? 1.1 : 0.45}
+        />
+      </mesh>
+      {Array.from({ length: 14 }).map((_, i) => {
+        const a = Math.PI * (0.08 + (i / 13) * 0.84);
+        return (
+          <mesh
+            key={`ray${i}`}
+            position={[Math.cos(a) * 0.72, 2.0 + Math.sin(a) * 0.72, -0.34]}
+            rotation={[0, 0, a - Math.PI / 2]}
+          >
+            <coneGeometry args={[0.028, 0.16, 6]} />
+            {gold}
+          </mesh>
+        );
+      })}
 
       <DeityEmblem id={idol.id} color={idol.color} />
     </group>
@@ -952,9 +1029,8 @@ function StatueBody({ idol, dragging, selected }: { idol: Idol; dragging: boolea
 
 /* Real deity model from assets, auto-scaled to murti size and seated on the pedestal */
 const MODEL_HEIGHT = 2.4; // world units, matches the procedural statues
-const PEDESTAL_TOP = 0.56;
 
-function DeityModel({ url }: { url: string }) {
+function DeityModel({ url, orientY = 0 }: { url: string; orientY?: number }) {
   const { scene } = useGLTF(url);
   const { model, scale, offset } = useMemo(() => {
     const model = scene.clone(true);
@@ -971,7 +1047,11 @@ function DeityModel({ url }: { url: string }) {
     return { model, scale, offset };
   }, [scene]);
 
-  return <primitive object={model} scale={scale} position={offset} />;
+  return (
+    <group rotation={[0, orientY, 0]}>
+      <primitive object={model} scale={scale} position={offset} />
+    </group>
+  );
 }
 
 /* Small hand prop that makes each deity recognizable */
@@ -1066,6 +1146,102 @@ function Decor({ item, lit, rotationY, selected, onPointerDown }: {
       {item.type === 'pillar' && <PillarMesh />}
       {item.type === 'flowers' && <FlowersMesh />}
       {item.type === 'rangoli' && <RangoliMesh />}
+      {item.type === 'kalash' && <KalashMesh />}
+      {item.type === 'bells' && <BellStandMesh />}
+    </group>
+  );
+}
+
+
+/* Kalash — the auspicious pot: brass body, mango leaves, coconut crown */
+function KalashMesh() {
+  const brass = <meshStandardMaterial color="#d9a441" metalness={0.75} roughness={0.28} envMapIntensity={1.1} />;
+  return (
+    <group>
+      {/* pot body */}
+      <mesh position={[0, 0.34, 0]} scale={[1, 0.85, 1]}>
+        <sphereGeometry args={[0.34, 18, 14]} />
+        {brass}
+      </mesh>
+      {/* foot + neck + rim */}
+      <mesh position={[0, 0.05, 0]}>
+        <cylinderGeometry args={[0.16, 0.2, 0.1, 14]} />
+        {brass}
+      </mesh>
+      <mesh position={[0, 0.62, 0]}>
+        <cylinderGeometry args={[0.13, 0.2, 0.14, 14]} />
+        {brass}
+      </mesh>
+      <mesh position={[0, 0.7, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.16, 0.035, 8, 18]} />
+        {brass}
+      </mesh>
+      {/* mango leaves around the rim */}
+      {[0, 1, 2, 3, 4].map(i => {
+        const a = (i / 5) * Math.PI * 2;
+        return (
+          <mesh key={i} position={[Math.cos(a) * 0.17, 0.76, Math.sin(a) * 0.17]} rotation={[0.5, -a, 0]} scale={[0.5, 1, 0.16]}>
+            <sphereGeometry args={[0.14, 8, 6]} />
+            <meshStandardMaterial color="#3f7d33" roughness={0.6} />
+          </mesh>
+        );
+      })}
+      {/* coconut */}
+      <mesh position={[0, 0.88, 0]} scale={[1, 1.15, 1]}>
+        <sphereGeometry args={[0.13, 12, 10]} />
+        <meshStandardMaterial color="#8a5a34" roughness={0.85} />
+      </mesh>
+      {/* kumkum swastik dot on the pot */}
+      <mesh position={[0, 0.4, 0.325]} scale={[1, 1, 0.3]}>
+        <sphereGeometry args={[0.05, 8, 8]} />
+        <meshStandardMaterial color="#c4302b" roughness={0.5} />
+      </mesh>
+    </group>
+  );
+}
+
+/* Bell stand — two turned posts, a crossbar, three hanging ghantas */
+function BellStandMesh() {
+  const brass = <meshStandardMaterial color="#d9a441" metalness={0.75} roughness={0.28} envMapIntensity={1.1} />;
+  const wood = <meshStandardMaterial map={woodTexture()} color="#a5622e" roughness={0.5} metalness={0.15} />;
+  return (
+    <group>
+      {[-1, 1].map(s => (
+        <group key={s} position={[s * 0.75, 0, 0]}>
+          <mesh position={[0, 0.06, 0]}>
+            <cylinderGeometry args={[0.14, 0.18, 0.12, 10]} />
+            {wood}
+          </mesh>
+          <mesh position={[0, 0.85, 0]}>
+            <cylinderGeometry args={[0.05, 0.07, 1.5, 10]} />
+            {wood}
+          </mesh>
+          <mesh position={[0, 1.62, 0]}>
+            <sphereGeometry args={[0.07, 8, 8]} />
+            {brass}
+          </mesh>
+        </group>
+      ))}
+      <mesh position={[0, 1.56, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.045, 0.045, 1.6, 8]} />
+        {wood}
+      </mesh>
+      {[-0.45, 0, 0.45].map(x => (
+        <group key={x} position={[x, 1.28, 0]}>
+          <mesh position={[0, 0.17, 0]}>
+            <cylinderGeometry args={[0.012, 0.012, 0.24, 6]} />
+            {brass}
+          </mesh>
+          <mesh>
+            <coneGeometry args={[0.11, 0.22, 14]} />
+            {brass}
+          </mesh>
+          <mesh position={[0, -0.12, 0]}>
+            <sphereGeometry args={[0.03, 8, 6]} />
+            {brass}
+          </mesh>
+        </group>
+      ))}
     </group>
   );
 }
