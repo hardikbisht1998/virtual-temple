@@ -9,7 +9,7 @@ import {
 import { IDOLS } from '../data';
 import type { PlacedIdol, Idol } from '../types';
 import { FLOOR_RADII, defaultIdolPos, type Layout3D, type DecorItem } from '../layout3d';
-import { DEITY_MODELS, DEITY_MODEL_ORIENT } from '../constants/models';
+import { resolveModel, hasModel, type MurtiModel } from '../constants/models';
 import { Shell } from '../rooms/Shell';
 import { MATERIALS } from '../materials/sets';
 
@@ -488,6 +488,7 @@ export function MandirScene({
           <Murti
             key={placed.instanceId}
             idol={idol}
+            modelId={placed.modelId}
             hasGarland={placed.hasGarland}
             position={pos}
             baseY={layout.mandir ? mandirLift(pos[0], pos[1]) : 0}
@@ -918,8 +919,9 @@ function Shikhara({ x, scale = 1 }: { x: number; scale?: number }) {
 
 /* ── Deity murti (statue) ────────────────────────────────────── */
 
-function Murti({ idol, hasGarland, position, baseY = 0, showLabel = true, rotationY, selected, dragging, onPointerDown }: {
+function Murti({ idol, modelId, hasGarland, position, baseY = 0, showLabel = true, rotationY, selected, dragging, onPointerDown }: {
   idol: Idol;
+  modelId?: string;
   hasGarland: boolean;
   position: [number, number];
   baseY?: number; // lifted onto the wooden mandir platform when standing on it
@@ -951,16 +953,19 @@ function Murti({ idol, hasGarland, position, baseY = 0, showLabel = true, rotati
       </mesh>
 
       {/* Statue — real 3D model when we have one, procedural otherwise */}
-      {DEITY_MODELS[idol.id] ? (
-        <Suspense fallback={<StatueBody idol={idol} dragging={dragging} selected={selected} />}>
-          <DeityModel url={DEITY_MODELS[idol.id]} orientY={DEITY_MODEL_ORIENT[idol.id] ?? 0} />
-        </Suspense>
-      ) : (
-        <StatueBody idol={idol} dragging={dragging} selected={selected} />
-      )}
+      {(() => {
+        const model = resolveModel(idol.id, modelId);
+        return model ? (
+          <Suspense fallback={<StatueBody idol={idol} dragging={dragging} selected={selected} />}>
+            <DeityModel model={model} />
+          </Suspense>
+        ) : (
+          <StatueBody idol={idol} dragging={dragging} selected={selected} />
+        );
+      })()}
 
       {/* Garland on the murti — a marigold mala draped from the shoulders */}
-      {hasGarland && <GarlandMesh neckY={DEITY_MODELS[idol.id] ? 2.16 : 1.82} />}
+      {hasGarland && <GarlandMesh neckY={hasModel(idol.id) ? 2.16 : 1.82} />}
 
       {/* Name label */}
       {showLabel && (
@@ -1175,9 +1180,14 @@ function StatueBody({ idol, dragging, selected }: { idol: Idol; dragging: boolea
 /* Real deity model from assets, auto-scaled to murti size and seated on the pedestal */
 const MODEL_HEIGHT = 2.4; // world units, matches the procedural statues
 
-function DeityModel({ url, orientY = 0 }: { url: string; orientY?: number }) {
-  const { scene } = useGLTF(url);
-  const { model, scale, offset } = useMemo(() => {
+/* Below this depth-to-width ratio a model is a flat cut-out rather than a
+   sculpture — many beautiful murti assets are painted planes. Those are
+   turned to face the viewer so they never present their paper edge. */
+const FLAT_RATIO = 0.45;
+
+function DeityModel({ model: spec }: { model: MurtiModel }) {
+  const { scene } = useGLTF(spec.url);
+  const { model, scale, offset, flat } = useMemo(() => {
     const model = scene.clone(true);
     enableShadows(model);
     const box = new Box3().setFromObject(model);
@@ -1189,15 +1199,28 @@ function DeityModel({ url, orientY = 0 }: { url: string; orientY?: number }) {
       PEDESTAL_TOP - box.min.y * scale,
       -center.z * scale,
     ];
-    return { model, scale, offset };
+    const flat = size.z / (size.x || 1) < FLAT_RATIO;
+    return { model, scale, offset, flat };
   }, [scene]);
 
+  const billboard = useRef<Group>(null);
+  useFrame(({ camera }) => {
+    if (!flat || !billboard.current) return;
+    // yaw only — a cut-out should turn to face the devotee, never tip over
+    const g = billboard.current;
+    g.rotation.y = Math.atan2(
+      camera.position.x - g.getWorldPosition(_bbTmp).x,
+      camera.position.z - _bbTmp.z
+    );
+  });
+
   return (
-    <group rotation={[0, orientY, 0]}>
+    <group ref={billboard} rotation={[0, spec.orientY ?? 0, 0]}>
       <primitive object={model} scale={scale} position={offset} />
     </group>
   );
 }
+const _bbTmp = new Vector3();
 
 /* Small hand prop that makes each deity recognizable */
 

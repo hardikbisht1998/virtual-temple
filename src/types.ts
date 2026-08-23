@@ -18,6 +18,9 @@ export interface Idol {
 export interface PlacedIdol {
   instanceId: string;
   idolId: string;
+  /* Which form of the deity is enshrined — a MURTI_MODELS id. Absent on
+     murtis placed before forms existed; the deity's default is used then. */
+  modelId?: string;
   hasGarland: boolean;
   hasTilak?: boolean;
 }

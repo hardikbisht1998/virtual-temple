@@ -10,7 +10,7 @@ import {
 } from '../layout3d';
 import { MATERIALS } from '../materials/sets';
 import { MandirScene } from './MandirScene';
-import { DEITY_MODELS } from '../constants/models';
+import { modelsFor, hasModel } from '../constants/models';
 
 const HEADING_FONT = "'Cinzel', serif";
 
@@ -47,9 +47,10 @@ interface Props {
   placedIdols: PlacedIdol[];
   onAddIdol: (idolId: string) => void;
   onRemoveIdol: (instanceId: string) => void;
+  onSetIdolModel: (instanceId: string, modelId: string) => void;
 }
 
-export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
+export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol, onSetIdolModel }: Props) {
   const [layout,     setLayout]     = useState<Layout3D>(loadLayout);
   const [dragId,     setDragId]     = useState<string | null>(null);
   const [selected,   setSelected]   = useState<string | null>(null);
@@ -319,18 +320,47 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
               title={idol.description}
             >
               <span>{idol.emoji}</span>{idol.name}
-              {DEITY_MODELS[idol.id] && (
+              {hasModel(idol.id) && (
                 <span
                   className="text-[9px] px-1.5 py-px rounded-full"
                   style={{ background: 'rgba(184,134,11,0.14)', color: '#b8860b', border: '1px solid rgba(184,134,11,0.4)' }}
                 >
-                  3D
+                  {modelsFor(idol.id).length > 1 ? `${modelsFor(idol.id).length} forms` : '3D'}
                 </span>
               )}
             </button>
           ))}
         </div>
       )}
+
+      {/* ── Form picker: swap which murti of this deity is enshrined ── */}
+      {(() => {
+        if (!selected || selected.startsWith('decor:')) return null;
+        const placed = placedIdols.find(p => p.instanceId === selected);
+        if (!placed) return null;
+        const forms = modelsFor(placed.idolId);
+        if (forms.length < 2) return null;
+        const idol = IDOLS.find(i => i.id === placed.idolId);
+        return (
+          <div
+            className="flex flex-wrap items-center gap-2 rounded-xl p-2.5"
+            style={{ background: 'rgba(255,255,255,0.72)', border: '1px solid rgba(176,180,190,0.6)', boxShadow: '0 2px 10px rgba(120,110,80,0.12)' }}
+          >
+            <span className="text-[10px] tracking-[0.2em] uppercase px-1" style={{ fontFamily: HEADING_FONT, color: '#b8860b' }}>
+              {idol?.name ?? 'Murti'} form:
+            </span>
+            {forms.map(f => (
+              <ToolBtn
+                key={f.id}
+                icon="🕉"
+                label={f.label}
+                active={(placed.modelId ?? forms[0].id) === f.id}
+                onClick={() => onSetIdolModel(placed.instanceId, f.id)}
+              />
+            ))}
+          </div>
+        );
+      })()}
 
       {/* ── 3D canvas ──────────────────────────────────────── */}
       <div

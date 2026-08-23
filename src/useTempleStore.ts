@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { TempleState, UserProfile, PrasadType, PrasadItem } from './types';
+import { defaultModelId } from './constants/models';
 
 const USER_KEY  = 'vt-user-v2';
 const STATE_KEY = 'vt-state-v2';
@@ -139,7 +140,26 @@ export function useTempleStore() {
   const addIdol = useCallback((idolId: string) => {
     setState(s => ({
       ...s,
-      placedIdols: [...s.placedIdols, { instanceId: crypto.randomUUID(), idolId, hasGarland: false, hasTilak: false }],
+      placedIdols: [
+        ...s.placedIdols,
+        {
+          instanceId: crypto.randomUUID(),
+          idolId,
+          modelId: defaultModelId(idolId),
+          hasGarland: false,
+          hasTilak: false,
+        },
+      ],
+    }));
+  }, []);
+
+  /* Swap which form of the deity is enshrined, keeping its offerings. */
+  const setIdolModel = useCallback((instanceId: string, modelId: string) => {
+    setState(s => ({
+      ...s,
+      placedIdols: s.placedIdols.map(p =>
+        p.instanceId === instanceId ? { ...p, modelId } : p
+      ),
     }));
   }, []);
 
@@ -294,6 +314,7 @@ export function useTempleStore() {
     setupTemple,
     setTempleName,
     addIdol,
+    setIdolModel,
     removeIdol,
     removeIdolsOfType,
     offerGarland,

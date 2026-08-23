@@ -81,6 +81,26 @@ export const IDOLS: Idol[] = [
     mantraDevanagari: 'ॐ ऐं सरस्वत्यै नमः',
     mantraMeaning: 'I bow to Goddess Saraswati, the source of creative arts, divine knowledge, and speech.',
   },
+  {
+    id: 'kali',
+    name: 'Kali',
+    emoji: '🗡️',
+    description: 'Fierce Mother, Destroyer of Ego & Fear',
+    color: '#4B2E83',
+    mantra: 'Om Krim Kalikayai Namah',
+    mantraDevanagari: 'ॐ क्रीं कालिकायै नमः',
+    mantraMeaning: 'I bow to Maa Kali, who destroys fear and the illusions of the ego.',
+  },
+  {
+    id: 'jagannath',
+    name: 'Jagannath',
+    emoji: '🛕',
+    description: 'Lord of the Universe, Beloved of Puri',
+    color: '#1F6F4A',
+    mantra: 'Jai Jagannath',
+    mantraDevanagari: 'जय जगन्नाथ',
+    mantraMeaning: 'Victory to Jagannath, Lord of the Universe, who receives all without distinction.',
+  },
 ];
 
 export const DAILY_SHLOKAS: Shloka[] = [

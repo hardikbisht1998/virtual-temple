@@ -21,7 +21,7 @@ export default function App() {
   const {
     user, state, incenseLit, abhishekamActive,
     createUser, setUserName, logout, setupTemple, setTempleName,
-    addIdol, removeIdol, removeIdolsOfType, offerGarland,
+    addIdol, setIdolModel, removeIdol, removeIdolsOfType, offerGarland,
     applyTilak, performAbhishekam, offerPrasad,
     lightIncense, lightDiya, incrementJapa, resetPuja,
   } = useTempleStore();
@@ -268,7 +268,7 @@ export default function App() {
             </div>
           }
         >
-          <Temple3D placedIdols={state.placedIdols} onAddIdol={addIdol} onRemoveIdol={removeIdol} />
+          <Temple3D placedIdols={state.placedIdols} onAddIdol={addIdol} onRemoveIdol={removeIdol} onSetIdolModel={setIdolModel} />
         </Suspense>
       ) : page === 'customize' ? (
         <CustomizePage
