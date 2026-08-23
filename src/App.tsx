@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, lazy, Suspense, useEffect } from 'react';
 import { useTempleStore } from './useTempleStore';
 import { OnboardingWizard } from './components/OnboardingWizard';
 import { TempleAltar } from './components/TempleAltar';
@@ -7,6 +7,7 @@ import { JapaMalaModal } from './components/JapaMalaModal';
 import { DailyShlokaModal } from './components/DailyShlokaModal';
 import { DarshanShareModal } from './components/DarshanShareModal';
 import { startOmDrone, stopOmDrone, isOmDronePlaying } from './audio/templeAudio';
+import { AartiBar, AartiPicker, useAarti } from './components/AartiPlayer';
 
 const Temple3D = lazy(() =>
   import('./components/Temple3D').then(m => ({ default: m.Temple3D }))
@@ -34,6 +35,14 @@ export default function App() {
   const [showJapaModal,      setShowJapaModal]      = useState(false);
   const [showShlokaModal,    setShowShlokaModal]    = useState(false);
   const [showDarshanModal,   setShowDarshanModal]   = useState(false);
+  const [showAarti,          setShowAarti]          = useState(false);
+  const aarti = useAarti();
+
+  /* The aarti player stops the drone when a song starts — reflect that in
+     the toggle rather than leaving it lit with nothing playing. */
+  useEffect(() => {
+    if (aarti.playing && omDroneActive) setOmDroneActive(false);
+  }, [aarti.playing, omDroneActive]);
 
   function toggleOmAudio() {
     if (omDroneActive) {
@@ -161,6 +170,22 @@ export default function App() {
             }}
           >
             <span>📤</span> Share Darshan
+          </button>
+
+          {/* Aarti button */}
+          <button
+            onClick={() => setShowAarti(true)}
+            className={`flex items-center gap-1 text-[11px] px-3 py-1.5 rounded-xl border font-semibold transition-all cursor-pointer hover:scale-105 ${aarti.playing ? 'breathe' : ''}`}
+            style={{
+              fontFamily: HEADING_FONT,
+              background: aarti.playing ? 'linear-gradient(135deg, #e6c14c, #b8860b)' : 'rgba(255,255,255,0.85)',
+              borderColor: aarti.playing ? '#b8860b' : 'rgba(201,162,39,0.5)',
+              color: aarti.playing ? '#ffffff' : '#6b5312',
+              boxShadow: aarti.playing ? '0 2px 12px rgba(184,134,11,0.45)' : '0 2px 8px rgba(184,134,11,0.15)',
+            }}
+            title="Play an aarti"
+          >
+            <span>🎵</span> {aarti.playing ? 'Aarti Playing' : 'Aarti'}
           </button>
 
           {/* Om Drone Toggle button */}
@@ -306,8 +331,15 @@ export default function App() {
           onLightDiya={lightDiya}
           onReset={resetPuja}
         />
+        <AartiBar />
       </main>
       )}
+
+      <AartiPicker
+        open={showAarti}
+        onClose={() => setShowAarti(false)}
+        placedDeityIds={new Set(state.placedIdols.map(p => p.idolId))}
+      />
 
       {/* ── Footer ─────────────────────────────────────────── */}
       <footer className="text-center py-5 px-4">

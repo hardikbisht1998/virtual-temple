@@ -4,6 +4,7 @@ import { Vector3, type PerspectiveCamera } from 'three';
 import { loadLayout, saveActiveView, FLOOR_RADII } from '../layout3d';
 import { MandirScene, murtiAnchor, MURTI_EYE, DEVOTEE_EYE } from './MandirScene';
 import { IDOLS } from '../data';
+import { aartiFor, toggleAarti, useAartiPlaying } from './aartiHooks';
 import type { PlacedIdol } from '../types';
 
 /* How far in front of the murti the devotee stands. */
@@ -106,6 +107,8 @@ export default function MandirViewport({ placedIdols, onGarland }: {
   }, [darshanId, layout, placedIdols]);
 
   const inDarshan = darshanId !== null && standing !== null;
+  // true only when the aarti playing is this deity's own
+  const aartiOn = useAartiPlaying(deity?.id);
   const camPos = inDarshan ? standing! : wide;
   const camLook = inDarshan ? facing! : wideLook;
 
@@ -176,6 +179,22 @@ export default function MandirViewport({ placedIdols, onGarland }: {
             >
               Offer Garland
             </button>
+            {deity && aartiFor(deity.id) && (
+              <button
+                onClick={() => toggleAarti(deity.id)}
+                style={{
+                  pointerEvents: 'auto',
+                  fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700,
+                  letterSpacing: '0.08em', color: '#f3e4c2', cursor: 'pointer',
+                  padding: '8px 18px', borderRadius: 999,
+                  border: '1px solid rgba(243,228,194,0.35)',
+                  background: aartiOn ? 'rgba(184,134,11,0.85)' : 'rgba(40,24,10,0.55)',
+                }}
+                title={`${deity.name} aarti`}
+              >
+                {aartiOn ? '❚❚ Aarti' : '▶ Aarti'}
+              </button>
+            )}
             <button
               onClick={() => setDarshanId(null)}
               style={{
