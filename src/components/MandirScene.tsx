@@ -454,7 +454,7 @@ export function MandirScene({
       <Motes radius={radius} />
 
       <Shell shell={layout.shell} material={layout.material} radius={radius} shape={layout.floor.shape} />
-      {layout.mandir && <WoodenMandir />}
+      {layout.mandir && (layout.mandirStyle === 'marble' ? <MarbleMandir /> : <WoodenMandir />)}
 
       {/* Floor — also the drag surface */}
       <mesh
@@ -700,6 +700,156 @@ function WoodenMandir() {
 }
 
 /* Lathe-turned front pillar: base block, pot, ringed shaft, capital */
+
+/* ── Marble home mandir ──────────────────────────────────────────
+   The white-marble-and-gold cabinet found in most Indian homes: stepped
+   plinth, fluted pillars, gold-ribbed onion dome with kalash, jharokha
+   side chhatris. Same footprint constants as the wooden mandir, so
+   murtiLift and the murti arc work unchanged. */
+function MarbleMat({ bright = false }: { bright?: boolean }) {
+  return bright
+    ? <meshStandardMaterial map={marbleTexture()} color="#ffffff" roughness={0.28} metalness={0.06} envMapIntensity={1.0} />
+    : <meshStandardMaterial map={marbleTexture()} color="#f2ecdf" roughness={0.38} metalness={0.05} envMapIntensity={0.8} />;
+}
+function InlayMat() {
+  return <meshStandardMaterial color="#d9a441" metalness={0.8} roughness={0.25} envMapIntensity={1.2} />;
+}
+
+function MarbleMandir() {
+  const W = MANDIR_HALF_W * 2, D = MANDIR_HALF_D * 2;
+  const pillarX = MANDIR_HALF_W - 0.55;
+  const openH = BEAM_Y - PLATFORM_TOP;
+
+  return (
+    <group position={[0, 0, MANDIR_Z]} onUpdate={enableShadows}>
+      {/* stepped plinth */}
+      <mesh position={[0, 0.22, 0]}>
+        <boxGeometry args={[W + 0.9, 0.44, D + 0.9]} />
+        <MarbleMat />
+      </mesh>
+      <mesh position={[0, 0.6, 0]}>
+        <boxGeometry args={[W + 0.4, 0.36, D + 0.4]} />
+        <MarbleMat bright />
+      </mesh>
+      {/* gold skirting line on the plinth */}
+      <mesh position={[0, 0.44, (D + 0.9) / 2 + 0.005]}>
+        <boxGeometry args={[W + 0.9, 0.06, 0.02]} />
+        <InlayMat />
+      </mesh>
+
+      {/* deity platform */}
+      <mesh position={[0, PLATFORM_TOP - 0.18, 0]}>
+        <boxGeometry args={[W, 0.36, D]} />
+        <MarbleMat bright />
+      </mesh>
+      <mesh position={[0, PLATFORM_TOP - 0.02, D / 2 - 0.02]}>
+        <boxGeometry args={[W - 0.4, 0.04, 0.06]} />
+        <InlayMat />
+      </mesh>
+
+      {/* back wall + low side walls */}
+      <mesh position={[0, PLATFORM_TOP + openH / 2, -(MANDIR_HALF_D - 0.15)]}>
+        <boxGeometry args={[W - 0.5, openH, 0.14]} />
+        <MarbleMat />
+      </mesh>
+      {[-1, 1].map(sd => (
+        <mesh key={sd} position={[sd * (MANDIR_HALF_W - 0.3), PLATFORM_TOP + openH / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
+          <boxGeometry args={[D - 0.8, openH, 0.14]} />
+          <MarbleMat />
+        </mesh>
+      ))}
+
+      {/* fluted front pillars with gold base + capital */}
+      {[-pillarX, pillarX].map((px, i) => (
+        <group key={i} position={[px, 0, MANDIR_HALF_D - 0.35]}>
+          <mesh position={[0, PLATFORM_TOP + 0.14, 0]}>
+            <cylinderGeometry args={[0.2, 0.24, 0.24, 12]} />
+            <InlayMat />
+          </mesh>
+          <mesh position={[0, PLATFORM_TOP + openH / 2, 0]}>
+            <cylinderGeometry args={[0.14, 0.17, openH - 0.5, 18]} />
+            <MarbleMat bright />
+          </mesh>
+          <mesh position={[0, BEAM_Y - 0.16, 0]}>
+            <cylinderGeometry args={[0.24, 0.15, 0.28, 12]} />
+            <InlayMat />
+          </mesh>
+        </group>
+      ))}
+
+      {/* scalloped gold arch across the front opening */}
+      <mesh position={[0, BEAM_Y - 0.5, MANDIR_HALF_D - 0.32]} rotation={[0, 0, 0]}>
+        <torusGeometry args={[MANDIR_HALF_W - 0.9, 0.09, 10, 40, Math.PI]} />
+        <InlayMat />
+      </mesh>
+
+      {/* cornice */}
+      <mesh position={[0, BEAM_Y + 0.28, 0]}>
+        <boxGeometry args={[W + 0.5, 0.56, D + 0.5]} />
+        <MarbleMat />
+      </mesh>
+      <mesh position={[0, BEAM_Y + 0.02, (D + 0.5) / 2 + 0.005]}>
+        <boxGeometry args={[W + 0.5, 0.05, 0.02]} />
+        <InlayMat />
+      </mesh>
+
+      {/* central gold-ribbed onion dome + kalash */}
+      <group position={[0, ROOF_Y, 0]}>
+        <mesh position={[0, 0.18, 0]}>
+          <cylinderGeometry args={[1.15, 1.35, 0.36, 20]} />
+          <MarbleMat bright />
+        </mesh>
+        <mesh position={[0, 1.05, 0]} scale={[1, 1.12, 1]}>
+          <sphereGeometry args={[1.05, 24, 18]} />
+          <MarbleMat bright />
+        </mesh>
+        {/* gold ribs */}
+        {Array.from({ length: 8 }).map((_, i) => (
+          <mesh key={i} position={[0, 1.05, 0]} rotation={[0, (i / 8) * Math.PI, 0]} scale={[1.01, 1.13, 1.01]}>
+            <torusGeometry args={[1.05, 0.022, 6, 40, Math.PI]} />
+            <InlayMat />
+          </mesh>
+        ))}
+        <mesh position={[0, 2.25, 0]}>
+          <cylinderGeometry args={[0.09, 0.16, 0.22, 10]} />
+          <InlayMat />
+        </mesh>
+        <mesh position={[0, 2.45, 0]}>
+          <sphereGeometry args={[0.14, 10, 8]} />
+          <InlayMat />
+        </mesh>
+        <mesh position={[0, 2.66, 0]}>
+          <coneGeometry args={[0.06, 0.24, 8]} />
+          <InlayMat />
+        </mesh>
+      </group>
+
+      {/* corner chhatris */}
+      {[-1, 1].map(sd => (
+        <group key={`ch${sd}`} position={[sd * (MANDIR_HALF_W - 0.7), ROOF_Y, MANDIR_HALF_D - 0.7]}>
+          {[0, 1, 2, 3].map(i => {
+            const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+            return (
+              <mesh key={i} position={[Math.cos(a) * 0.28, 0.35, Math.sin(a) * 0.28]}>
+                <cylinderGeometry args={[0.035, 0.035, 0.7, 8]} />
+                <MarbleMat bright />
+              </mesh>
+            );
+          })}
+          <mesh position={[0, 0.82, 0]} scale={[1, 0.75, 1]}>
+            <sphereGeometry args={[0.42, 14, 10]} />
+            <MarbleMat bright />
+          </mesh>
+          <mesh position={[0, 1.18, 0]}>
+            <coneGeometry args={[0.05, 0.18, 8]} />
+            <InlayMat />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
 function TurnedPillar({ x, z }: { x: number; z: number }) {
   const H = BEAM_Y - PLATFORM_TOP;
   return (
@@ -809,13 +959,8 @@ function Murti({ idol, hasGarland, position, baseY = 0, showLabel = true, rotati
         <StatueBody idol={idol} dragging={dragging} selected={selected} />
       )}
 
-      {/* Garland on the murti */}
-      {hasGarland && (
-        <mesh position={[0, 1.62, 0.12]} rotation={[0.5, 0, 0]}>
-          <torusGeometry args={[0.4, 0.07, 8, 24]} />
-          <meshStandardMaterial color="#f58bb4" emissive="#e8447a" emissiveIntensity={0.28} roughness={0.7} />
-        </mesh>
-      )}
+      {/* Garland on the murti — a marigold mala draped from the shoulders */}
+      {hasGarland && <GarlandMesh neckY={DEITY_MODELS[idol.id] ? 2.16 : 1.82} />}
 
       {/* Name label */}
       {showLabel && (
@@ -1055,6 +1200,58 @@ function DeityModel({ url, orientY = 0 }: { url: string; orientY?: number }) {
 }
 
 /* Small hand prop that makes each deity recognizable */
+
+/* A haar as it actually hangs: two strands falling from the shoulders and
+   meeting low on the chest in a U, strung from marigold heads with leaf
+   beads between, a rose pendant at the bottom. Positioned by neck height —
+   GLB murtis are normalized to MODEL_HEIGHT so one anchor per kind works. */
+function GarlandMesh({ neckY }: { neckY: number }) {
+  const beads = useMemo(() => {
+    const pts: { p: [number, number, number]; kind: 0 | 1 | 2; s: number }[] = [];
+    const N = 22;
+    const shoulderW = 0.34;  // half-width at the top of the drape
+    const dropDepth = 0.78;  // how far the U falls below the neck
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;                      // 0..1 across the strand
+      const xa = (t - 0.5) * 2;             // -1..1
+      const x = xa * shoulderW;
+      const y = neckY - dropDepth * (1 - xa * xa); // parabolic U
+      const z = 0.16 + 0.1 * (1 - xa * xa);        // bows forward off the chest
+      const kind = i === Math.floor(N / 2) ? 2 : i % 3 === 2 ? 1 : 0;
+      pts.push({ p: [x, y, z], kind, s: kind === 2 ? 1 : 0.85 + 0.3 * Math.sin(t * Math.PI) });
+    }
+    return pts;
+  }, [neckY]);
+
+  return (
+    <group>
+      {beads.map((b, i) =>
+        b.kind === 2 ? (
+          /* pendant rose at the bottom of the U */
+          <group key={i} position={b.p}>
+            <mesh scale={[1, 0.8, 1]}>
+              <sphereGeometry args={[0.085, 10, 8]} />
+              <meshStandardMaterial color="#d8355f" roughness={0.6} />
+            </mesh>
+            <mesh position={[0, -0.07, 0]} scale={[1, 1.4, 1]}>
+              <sphereGeometry args={[0.04, 8, 6]} />
+              <meshStandardMaterial color="#3f7d33" roughness={0.6} />
+            </mesh>
+          </group>
+        ) : (
+          <mesh key={i} position={b.p} scale={b.s}>
+            <sphereGeometry args={[b.kind === 1 ? 0.032 : 0.048, 8, 6]} />
+            <meshStandardMaterial
+              color={b.kind === 1 ? '#3f7d33' : i % 2 ? '#f5a623' : '#e8720a'}
+              roughness={0.65}
+            />
+          </mesh>
+        )
+      )}
+    </group>
+  );
+}
+
 function DeityEmblem({ id, color }: { id: string; color: string }) {
   const gold = <meshStandardMaterial color="#e9b438" metalness={0.65} roughness={0.3} />;
   switch (id) {

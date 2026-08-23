@@ -6,7 +6,7 @@ import type { PlacedIdol } from '../types';
 import {
   LAYOUT_KEY, DEFAULT_LAYOUT, FLOOR_RADII, loadLayout, snap, PRESETS,
   type Layout3D, type FloorConfig, type FloorShape, type DecorType, type DecorItem,
-  type ShellId, type MaterialId, type Preset,
+  type ShellId, type MaterialId, type MandirStyle, type Preset,
 } from '../layout3d';
 import { MATERIALS } from '../materials/sets';
 import { MandirScene } from './MandirScene';
@@ -93,8 +93,14 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
     });
   }, []);
 
-  const toggleMandir = useCallback(() => {
-    setLayout(l => ({ ...l, mandir: !l.mandir }));
+  /* Clicking the active style turns the cabinet off; clicking the other
+     switches style (turning it on if needed). */
+  const pickMandir = useCallback((style: MandirStyle) => {
+    setLayout(l =>
+      l.mandir && l.mandirStyle === style
+        ? { ...l, mandir: false }
+        : { ...l, mandir: true, mandirStyle: style }
+    );
   }, []);
 
   const addDecor = useCallback((type: DecorType) => {
@@ -158,7 +164,8 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
         <ToolBtn icon="◻️" label="Medium" active={layout.floor.size === 'medium'} onClick={() => setFloor({ size: 'medium' })} />
         <ToolBtn icon="⬜" label="Large"  active={layout.floor.size === 'large'}  onClick={() => setFloor({ size: 'large' })} />
         <div className="flex-1" />
-        <ToolBtn icon="🛕" label="Wood Mandir" active={layout.mandir} onClick={toggleMandir} />
+        <ToolBtn icon="🛕" label="Wood Mandir" active={layout.mandir && layout.mandirStyle === 'wood'} onClick={() => pickMandir('wood')} />
+        <ToolBtn icon="🕌" label="Marble Mandir" active={layout.mandir && layout.mandirStyle === 'marble'} onClick={() => pickMandir('marble')} />
       </div>
 
       {/* ── Shell + material: the composed space and its stone ── */}
@@ -174,6 +181,9 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
         <ToolBtn icon="🕯️" label="Niche"     active={layout.shell === 'niche'}     onClick={() => setShell('niche')} />
         <ToolBtn icon="🏛️" label="Hall"      active={layout.shell === 'hall'}      onClick={() => setShell('hall')} />
         <ToolBtn icon="🌙" label="Courtyard" active={layout.shell === 'courtyard'} onClick={() => setShell('courtyard')} />
+        <ToolBtn icon="⛰️" label="Shikhara"  active={layout.shell === 'nagara'}    onClick={() => setShell('nagara')} />
+        <ToolBtn icon="🪷" label="South"     active={layout.shell === 'dravidian'} onClick={() => setShell('dravidian')} />
+        <ToolBtn icon="🌴" label="Kerala"    active={layout.shell === 'kerala'}    onClick={() => setShell('kerala')} />
         <span className="w-px h-5 mx-1" style={{ background: 'rgba(176,180,190,0.6)' }} />
         {(Object.keys(MATERIALS) as MaterialId[]).map(id => (
           <ToolBtn

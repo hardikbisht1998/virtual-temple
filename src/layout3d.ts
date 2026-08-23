@@ -8,11 +8,14 @@ export type FloorSize  = 'small' | 'medium' | 'large';
 /* The room shell is the composed space the shrine stands in. Users pick a
    shell rather than assembling walls, because the shells are designed as
    architecture — any pick reads as a temple. */
-export type ShellId = 'open' | 'room' | 'niche' | 'hall' | 'courtyard';
+export type ShellId = 'open' | 'room' | 'niche' | 'hall' | 'courtyard' | 'nagara' | 'dravidian' | 'kerala';
 
 /* One material choice restyles the whole build — walls, pillars, trim,
    floor — so a mandir stays coherent no matter how it was assembled. */
 export type MaterialId = 'marble' | 'sandstone' | 'teak' | 'granite';
+
+/* The shrine cabinet itself: carved wood or white marble with gold inlay. */
+export type MandirStyle = 'wood' | 'marble';
 
 export const FLOOR_RADII: Record<FloorSize, number> = { small: 9, medium: 14, large: 20 };
 
@@ -39,7 +42,8 @@ export interface Layout3D {
   floor: FloorConfig;
   shell: ShellId;
   material: MaterialId;
-  mandir: boolean; // carved wooden mandir cabinet (modelled on assets/templestructure.jpg)
+  mandir: boolean; // shrine cabinet on/off
+  mandirStyle: MandirStyle; // carved wood (modelled on assets/templestructure.jpg) or marble+gold
 }
 
 export const LAYOUT_KEY = 'vt-3d-v1';
@@ -52,6 +56,7 @@ export const DEFAULT_LAYOUT: Layout3D = {
   shell: 'room',
   material: 'marble',
   mandir: true,
+  mandirStyle: 'wood',
 };
 
 /* One-tap starting points. A newcomer should have something beautiful in
@@ -89,6 +94,24 @@ export const PRESETS: Preset[] = [
     icon: '🌙',
     patch: { floor: { shape: 'hex', size: 'large' }, shell: 'courtyard', material: 'granite', mandir: true },
   },
+  {
+    id: 'nagara',
+    label: 'Shikhara Temple',
+    icon: '⛰️',
+    patch: { floor: { shape: 'square', size: 'medium' }, shell: 'nagara', material: 'sandstone', mandir: true },
+  },
+  {
+    id: 'dravidian',
+    label: 'South Temple',
+    icon: '🪷',
+    patch: { floor: { shape: 'square', size: 'large' }, shell: 'dravidian', material: 'granite', mandir: true },
+  },
+  {
+    id: 'kerala',
+    label: 'Sreekovil',
+    icon: '🌴',
+    patch: { floor: { shape: 'square', size: 'medium' }, shell: 'kerala', material: 'teak', mandir: true },
+  },
 ];
 
 export function loadLayout(): Layout3D {
@@ -102,6 +125,7 @@ export function loadLayout(): Layout3D {
         merged.shell = parsed.hall ? 'hall' : parsed.room ? 'room' : 'open';
       }
       if (!parsed.material) merged.material = 'marble';
+      if (!parsed.mandirStyle) merged.mandirStyle = 'wood';
       return merged;
     }
   } catch { /* corrupt layout falls back to default */ }
