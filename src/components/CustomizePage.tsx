@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { IDOLS } from '../data';
 import { DeityPhoto } from './DeityPhoto';
 import type { TempleState, UserProfile } from '../types';
+import { downloadBackup, inspectBackup, applyBackup } from '../backup';
 
 const DECO_FONT    = "'Cinzel Decorative', serif";
 const HEADING_FONT = "'Cinzel', serif";
@@ -59,6 +60,8 @@ export function CustomizePage({
         onRemove={onRemoveIdolsOfType}
       />
 
+      <BackupCard templeName={state.templeName} />
+
       {/* ── Footer actions ─────────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 14 }}
@@ -96,6 +99,142 @@ export function CustomizePage({
 }
 
 /* ── Shared section card ─────────────────────────────────────── */
+
+
+/* ── Backup & restore ────────────────────────────────────────────
+   A temple lives in this browser alone. This is how a devotee keeps a copy
+   of theirs and carries it to another device. */
+function BackupCard({ templeName }: { templeName: string }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<{ text: string; summary: NonNullable<ReturnType<typeof inspectBackup>['summary']> } | null>(null);
+  const [note, setNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  function chooseFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // let the same file be picked again after a cancel
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result ?? '');
+      const check = inspectBackup(text);
+      if (!check.ok || !check.summary) {
+        setPending(null);
+        setNote({ kind: 'err', text: check.message });
+        return;
+      }
+      setNote(null);
+      setPending({ text, summary: check.summary });
+    };
+    reader.onerror = () => setNote({ kind: 'err', text: 'That file could not be read.' });
+    reader.readAsText(file);
+  }
+
+  function confirmRestore() {
+    if (!pending) return;
+    const res = applyBackup(pending.text);
+    if (!res.ok) {
+      setPending(null);
+      setNote({ kind: 'err', text: res.message });
+      return;
+    }
+    // reload so every hook re-reads storage rather than holding stale state
+    window.location.reload();
+  }
+
+  return (
+    <SectionCard
+      icon="🗝️"
+      title="Backup & Restore"
+      subtitle="Keep a copy of your temple, or bring it to another device"
+      delay={0.18}
+    >
+      <p className="text-[11px] text-amber-800/80 mb-4 leading-relaxed">
+        Your mandir is saved in this browser only — clearing site data or switching
+        device would lose it. Save a backup file to keep it safe.
+      </p>
+
+      <div className="flex flex-wrap gap-2.5">
+        <button
+          onClick={() => { setNote(null); downloadBackup(templeName); }}
+          className="flex items-center gap-2 text-xs px-4 py-2.5 rounded-xl font-bold cursor-pointer transition-all active:scale-95"
+          style={{
+            fontFamily: HEADING_FONT,
+            background: 'linear-gradient(135deg, #e6c14c, #b8860b)',
+            color: '#fff',
+            boxShadow: '0 2px 14px rgba(184,134,11,0.4)',
+            border: 'none',
+          }}
+        >
+          ⬇ Save Backup
+        </button>
+
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="flex items-center gap-2 text-xs px-4 py-2.5 rounded-xl font-bold cursor-pointer transition-all active:scale-95"
+          style={{
+            fontFamily: HEADING_FONT,
+            background: 'rgba(255,255,255,0.75)',
+            color: '#7a5a1e',
+            border: '1px solid rgba(201,162,39,0.6)',
+          }}
+        >
+          ⬆ Restore Backup
+        </button>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json,application/json"
+          onChange={chooseFile}
+          style={{ display: 'none' }}
+        />
+      </div>
+
+      {/* Restoring replaces the current temple, so name what is in the file
+          and make the devotee agree before anything is overwritten. */}
+      {pending && (
+        <div
+          className="mt-4 rounded-2xl p-4"
+          style={{ background: 'rgba(255,247,230,0.9)', border: '1px solid rgba(201,162,39,0.55)' }}
+        >
+          <p className="text-[11px] text-amber-950 leading-relaxed">
+            This backup holds <b>{pending.summary.temple}</b> — {pending.summary.devotee}&rsquo;s
+            temple with <b>{pending.summary.murtis}</b> {pending.summary.murtis === 1 ? 'murti' : 'murtis'},
+            saved {pending.summary.savedAt}.
+          </p>
+          <p className="text-[11px] mt-1.5 mb-3" style={{ color: '#a3421f' }}>
+            Restoring replaces the temple currently in this browser.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={confirmRestore}
+              className="text-xs px-4 py-2 rounded-xl font-bold cursor-pointer active:scale-95"
+              style={{ fontFamily: HEADING_FONT, background: 'linear-gradient(135deg, #e6c14c, #b8860b)', color: '#fff', border: 'none' }}
+            >
+              Restore this temple
+            </button>
+            <button
+              onClick={() => setPending(null)}
+              className="text-xs px-4 py-2 rounded-xl font-semibold cursor-pointer active:scale-95"
+              style={{ fontFamily: HEADING_FONT, background: 'transparent', color: '#8a7a55', border: '1px solid rgba(176,180,190,0.7)' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {note && (
+        <p
+          className="mt-3 text-[11px]"
+          style={{ color: note.kind === 'err' ? '#a3421f' : '#4a7a3a', fontFamily: HEADING_FONT }}
+        >
+          {note.text}
+        </p>
+      )}
+    </SectionCard>
+  );
+}
 
 function SectionCard({ icon, title, subtitle, delay, children }: {
   icon: string;
