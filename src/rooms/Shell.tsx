@@ -601,30 +601,33 @@ function DravidianShell({ radius, m }: { radius: number; m: MaterialSet }) {
         </mesh>
       ))}
 
-      {/* deepa-stambha before the shrine: tapering pillar with lamp tiers */}
-      <group position={[0, 0, 2.8]}>
-        <mesh position={[0, 0.3, 0]}>
-          <cylinderGeometry args={[0.55, 0.7, 0.6, 12]} />
-          <Stone m={m} tone="trim" />
-        </mesh>
-        <mesh position={[0, 3.1, 0]}>
-          <cylinderGeometry args={[0.14, 0.32, 5, 12]} />
-          <Stone m={m} tone="pillar" />
-        </mesh>
-        {[1.6, 2.7, 3.8, 4.9].map((y, i) => (
-          <group key={y}>
-            <mesh position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
-              <torusGeometry args={[0.42 - i * 0.07, 0.05, 8, 16]} />
-              <Gild m={m} />
-            </mesh>
-            <Lamp position={[0, y + 0.12, 0]} m={m} intensity={4} distance={5} />
-          </group>
-        ))}
-        <mesh position={[0, 5.75, 0]}>
-          <sphereGeometry args={[0.16, 10, 8]} />
-          <Gild m={m} />
-        </mesh>
-      </group>
+      {/* deepa-stambhas flanking the approach — never on the central axis,
+         so the murtis stay visible from the Temple page's front view */}
+      {[-1, 1].map(sd => (
+        <group key={`ds${sd}`} position={[sd * 4.6, 0, 2.6]}>
+          <mesh position={[0, 0.3, 0]}>
+            <cylinderGeometry args={[0.5, 0.65, 0.6, 12]} />
+            <Stone m={m} tone="trim" />
+          </mesh>
+          <mesh position={[0, 2.8, 0]}>
+            <cylinderGeometry args={[0.12, 0.28, 4.4, 12]} />
+            <Stone m={m} tone="pillar" />
+          </mesh>
+          {[1.5, 2.5, 3.5, 4.4].map((y, i) => (
+            <group key={y}>
+              <mesh position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                <torusGeometry args={[0.38 - i * 0.06, 0.05, 8, 16]} />
+                <Gild m={m} />
+              </mesh>
+              <Lamp position={[0, y + 0.12, 0]} m={m} intensity={4} distance={5} />
+            </group>
+          ))}
+          <mesh position={[0, 5.15, 0]}>
+            <sphereGeometry args={[0.15, 10, 8]} />
+            <Gild m={m} />
+          </mesh>
+        </group>
+      ))}
 
       <Lamp position={[-3.4, 4.7, gateZ - 1.6]} m={m} intensity={7} />
       <Lamp position={[3.4, 4.7, gateZ - 1.6]} m={m} intensity={7} />

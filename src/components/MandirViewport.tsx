@@ -6,63 +6,57 @@ import { MandirScene, murtiAnchor, MURTI_EYE, DEVOTEE_EYE } from './MandirScene'
 import { IDOLS } from '../data';
 import type { PlacedIdol } from '../types';
 
-/* How far in front of the murti the devotee stands, and how long the
-   approach takes. Slow on purpose — walking up to a deity is not a cut. */
+/* How far in front of the murti the devotee stands. */
 const STAND_BACK = 4.3;
-const APPROACH = 1.6;
+/* Time constant of the camera's approach, in seconds. Deliberately unhurried
+   — walking up to a deity, or crossing to another spot, is not a cut. */
+const EASE = 0.55;
 /* The shrine sits above standing height, so darshan genuinely looks upward.
    Aim at the chest rather than the eyes so the whole figure stays in frame. */
 const GAZE_DROP = 0.6;
 const WIDE_FOV = 42;
 const DARSHAN_FOV = 34;
 
-/* Drives the camera between the wide shrine framing and a darshan view
-   standing before one murti. Lives inside the Canvas so it can useFrame. */
-function CameraRig({ from, lookFrom, to, lookTo, active }: {
-  from: [number, number, number];
-  lookFrom: [number, number, number];
-  to: [number, number, number] | null;
-  lookTo: [number, number, number] | null;
-  active: boolean;
-}) {
+type Vec3 = [number, number, number];
+
+/* Eases the camera toward whatever position/look/lens it is given, framerate
+   independently. One damped target handles every transition the page makes —
+   switching between saved viewpoints and stepping up for darshan alike. */
+function CameraRig({ pos, look, fov }: { pos: Vec3; look: Vec3; fov: number }) {
   const { camera } = useThree() as { camera: PerspectiveCamera };
-  const t = useRef(0);
-  const pos = useMemo(() => new Vector3(), []);
-  const look = useMemo(() => new Vector3(), []);
-  const a = useMemo(() => new Vector3(), []);
-  const b = useMemo(() => new Vector3(), []);
+  const current = useRef<Vector3 | null>(null);
+  const tPos = useMemo(() => new Vector3(), []);
+  const tLook = useMemo(() => new Vector3(), []);
 
   useFrame((_, delta) => {
-    const target = active && to ? 1 : 0;
-    // ease toward the target state rather than snapping
-    t.current += Math.sign(target - t.current) * Math.min(delta / APPROACH, Math.abs(target - t.current));
-    const k = t.current * t.current * (3 - 2 * t.current); // smoothstep
+    tPos.set(...pos);
+    tLook.set(...look);
 
-    a.set(...from);
-    b.set(...(to ?? from));
-    pos.lerpVectors(a, b, k);
-
-    a.set(...lookFrom);
-    b.set(...(lookTo ?? lookFrom));
-    look.lerpVectors(a, b, k);
-
-    camera.position.copy(pos);
-    camera.lookAt(look);
-
-    // narrow the lens on approach — less wide-angle distortion up close
-    const fov = WIDE_FOV + (DARSHAN_FOV - WIDE_FOV) * k;
-    if (Math.abs(camera.fov - fov) > 0.01) {
+    if (current.current === null) {
+      // first frame: start already framed rather than flying in
+      camera.position.copy(tPos);
+      current.current = tLook.clone();
       camera.fov = fov;
       camera.updateProjectionMatrix();
+    } else {
+      const k = 1 - Math.exp(-delta / EASE);
+      camera.position.lerp(tPos, k);
+      current.current.lerp(tLook, k);
+      const nextFov = camera.fov + (fov - camera.fov) * k;
+      if (Math.abs(nextFov - camera.fov) > 0.01) {
+        camera.fov = nextFov;
+        camera.updateProjectionMatrix();
+      }
     }
+    camera.lookAt(current.current);
   });
 
   return null;
 }
 
-/* Front view of the user's 3D mandir, embedded in the Temple tab.
-   Tapping a murti walks the camera up to it for darshan; tapping again
-   from there offers a garland. */
+/* Live view of the user's 3D mandir, embedded in the Temple tab.
+   Viewpoints saved in the 3D editor appear as a switcher; tapping a murti
+   walks the camera up to it for darshan, and tapping again offers a garland. */
 export default function MandirViewport({ placedIdols, onGarland }: {
   placedIdols: PlacedIdol[];
   onGarland: (instanceId: string) => void;
@@ -71,15 +65,21 @@ export default function MandirViewport({ placedIdols, onGarland }: {
   // and switching tabs remounts this component.
   const [layout] = useState(loadLayout);
   const [darshanId, setDarshanId] = useState<string | null>(null);
+  // index into layout.views, or null for the automatic framing
+  const [viewIdx, setViewIdx] = useState<number | null>(layout.views.length ? 0 : null);
   const radius = FLOOR_RADII[layout.floor.size];
 
-  // Wide framing: the viewpoint the devotee saved in the 3D editor wins —
-  // they know where their temple looks best. Otherwise frame the shrine
-  // automatically (close in when the mandir cabinet is up).
-  const camZ = layout.mandir ? Math.max(11, radius * 0.8) : radius * 1.45;
-  const lookY = layout.mandir ? 3.4 : 1.8;
-  const wide: [number, number, number] = layout.view ? layout.view.pos : [0, 4.4, camZ];
-  const wideLook: [number, number, number] = layout.view ? layout.view.look : [0, lookY, 0];
+  // Automatic framing: the shrine rather than the whole floor — when the
+  // mandir cabinet is up, move in close so it fills the view.
+  const auto = useMemo(() => {
+    const camZ = layout.mandir ? Math.max(11, radius * 0.8) : radius * 1.45;
+    const lookY = layout.mandir ? 3.4 : 1.8;
+    return { pos: [0, 4.4, camZ] as Vec3, look: [0, lookY, 0] as Vec3 };
+  }, [layout.mandir, radius]);
+
+  const chosen = viewIdx !== null ? layout.views[viewIdx] : undefined;
+  const wide = chosen ? chosen.pos : auto.pos;
+  const wideLook = chosen ? chosen.look : auto.look;
 
   // Darshan framing: eye level, a pace in front, looking up into the face.
   const { standing, facing, deity } = useMemo(() => {
@@ -89,24 +89,20 @@ export default function MandirViewport({ placedIdols, onGarland }: {
     const [x, baseY, z] = anchor;
     const placed = placedIdols.find(p => p.instanceId === darshanId);
     return {
-      standing: [x, DEVOTEE_EYE, z + STAND_BACK] as [number, number, number],
-      facing: [x, baseY + MURTI_EYE - GAZE_DROP, z] as [number, number, number],
+      standing: [x, DEVOTEE_EYE, z + STAND_BACK] as Vec3,
+      facing: [x, baseY + MURTI_EYE - GAZE_DROP, z] as Vec3,
       deity: IDOLS.find(d => d.id === placed?.idolId) ?? null,
     };
   }, [darshanId, layout, placedIdols]);
 
   const inDarshan = darshanId !== null && standing !== null;
+  const camPos = inDarshan ? standing! : wide;
+  const camLook = inDarshan ? facing! : wideLook;
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <Canvas shadows="soft" dpr={[1, 2]} camera={{ position: wide, fov: 42 }}>
-        <CameraRig
-          from={wide}
-          lookFrom={wideLook}
-          to={standing}
-          lookTo={facing}
-          active={inDarshan}
-        />
+      <Canvas shadows="soft" dpr={[1, 2]} camera={{ position: wide, fov: WIDE_FOV }}>
+        <CameraRig pos={camPos} look={camLook} fov={inDarshan ? DARSHAN_FOV : WIDE_FOV} />
         <MandirScene
           layout={layout}
           placedIdols={placedIdols}
@@ -120,6 +116,28 @@ export default function MandirViewport({ placedIdols, onGarland }: {
           }}
         />
       </Canvas>
+
+      {/* Viewpoint switcher — the spots the devotee saved in the 3D editor.
+          Hidden during darshan, where the deity should have the frame. */}
+      {!inDarshan && layout.views.length > 0 && (
+        <div
+          style={{
+            position: 'absolute', top: 8, left: 8,
+            display: 'flex', gap: 5, flexWrap: 'wrap', maxWidth: '70%',
+          }}
+        >
+          <ViewPill label="Auto" active={viewIdx === null} onClick={() => setViewIdx(null)} />
+          {layout.views.map((v, i) => (
+            <ViewPill
+              key={v.id}
+              label={String(i + 1)}
+              title={v.label}
+              active={viewIdx === i}
+              onClick={() => setViewIdx(i)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Darshan chrome — kept to the edges so nothing sits between the
           devotee and the deity */}
@@ -195,5 +213,32 @@ export default function MandirViewport({ placedIdols, onGarland }: {
         </div>
       )}
     </div>
+  );
+}
+
+function ViewPill({ label, title, active, onClick }: {
+  label: string;
+  title?: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title ?? label}
+      style={{
+        cursor: 'pointer',
+        fontFamily: "'Cinzel', serif", fontSize: 10, fontWeight: 700,
+        letterSpacing: '0.12em', textTransform: 'uppercase',
+        padding: '4px 10px', borderRadius: 999, lineHeight: 1.4,
+        color: active ? '#3a2a08' : 'rgba(255,226,170,0.9)',
+        background: active ? 'linear-gradient(180deg,#f5d98a,#d8a93f)' : 'rgba(30,18,6,0.5)',
+        border: `1px solid ${active ? 'rgba(255,225,160,0.8)' : 'rgba(243,228,194,0.3)'}`,
+        boxShadow: active ? '0 2px 8px rgba(0,0,0,0.3)' : 'none',
+        backdropFilter: 'blur(3px)',
+      }}
+    >
+      {label}
+    </button>
   );
 }

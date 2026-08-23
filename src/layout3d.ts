@@ -35,14 +35,19 @@ export interface DecorItem {
   pos: [number, number];
 }
 
-/* A camera framing the user chose in the 3D editor. When set, the Temple
-   page's altar view uses it instead of the automatic front framing — so a
-   gopuram or roof beam never hides the murtis: the devotee decides where
-   they stand. */
+/* A camera framing the devotee chose in the 3D editor. The Temple page
+   offers these alongside its automatic front framing, so a gopuram or roof
+   beam never hides the murtis — the devotee decides where they stand, and
+   can keep several favourite spots to move between. */
 export interface SavedView {
+  id: string;
+  label: string;
   pos: [number, number, number];
   look: [number, number, number];
 }
+
+/* Enough for a few favourite angles without turning into a gallery. */
+export const MAX_VIEWS = 6;
 
 export interface Layout3D {
   positions: Record<string, [number, number]>; // instanceId -> [x, z]
@@ -53,7 +58,7 @@ export interface Layout3D {
   material: MaterialId;
   mandir: boolean; // shrine cabinet on/off
   mandirStyle: MandirStyle; // carved wood (modelled on assets/templestructure.jpg) or marble+gold
-  view: SavedView | null; // null = automatic framing
+  views: SavedView[]; // empty = automatic framing only
 }
 
 export const LAYOUT_KEY = 'vt-3d-v1';
@@ -67,7 +72,7 @@ export const DEFAULT_LAYOUT: Layout3D = {
   material: 'marble',
   mandir: true,
   mandirStyle: 'wood',
-  view: null,
+  views: [],
 };
 
 /* One-tap starting points. A newcomer should have something beautiful in
@@ -137,7 +142,13 @@ export function loadLayout(): Layout3D {
       }
       if (!parsed.material) merged.material = 'marble';
       if (!parsed.mandirStyle) merged.mandirStyle = 'wood';
-      if (parsed.view === undefined) merged.view = null;
+      // Migrate the earlier single-view field into the list.
+      const legacy = (parsed as { view?: { pos: [number, number, number]; look: [number, number, number] } | null }).view;
+      if (!Array.isArray(parsed.views)) {
+        merged.views = legacy
+          ? [{ id: 'v1', label: 'View 1', pos: legacy.pos, look: legacy.look }]
+          : [];
+      }
       return merged;
     }
   } catch { /* corrupt layout falls back to default */ }

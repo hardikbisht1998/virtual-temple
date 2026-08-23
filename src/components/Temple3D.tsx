@@ -4,7 +4,7 @@ import { OrbitControls } from '@react-three/drei';
 import { IDOLS } from '../data';
 import type { PlacedIdol } from '../types';
 import {
-  LAYOUT_KEY, DEFAULT_LAYOUT, FLOOR_RADII, loadLayout, snap, PRESETS,
+  LAYOUT_KEY, DEFAULT_LAYOUT, FLOOR_RADII, loadLayout, snap, PRESETS, MAX_VIEWS,
   type Layout3D, type FloorConfig, type FloorShape, type DecorType, type DecorItem,
   type ShellId, type MaterialId, type MandirStyle, type Preset,
 } from '../layout3d';
@@ -85,7 +85,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
   }, []);
 
   const setShell = useCallback((shell: ShellId) => {
-    setLayout(l => ({ ...l, shell, view: null }));
+    setLayout(l => ({ ...l, shell, views: [] }));
   }, []);
 
   const setMaterial = useCallback((material: MaterialId) => {
@@ -95,7 +95,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
   const applyPreset = useCallback((preset: Preset) => {
     // A preset restyles the space; the devotee's murtis and decor stay put.
     setLayout(l => {
-      const next = { ...l, ...preset.patch, view: null };
+      const next = { ...l, ...preset.patch, views: [] };
       const r = FLOOR_RADII[next.floor.size];
       const clamp = ([x, z]: [number, number]): [number, number] => clampToFloor(x, z, r, next.floor.shape);
       return {
@@ -119,11 +119,25 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
   const camPos = useRef<[number, number, number]>([0, 5, 11.5]);
 
   const saveView = useCallback(() => {
-    setLayout(l => ({ ...l, view: { pos: camPos.current, look: [0, 1.6, 0] } }));
+    setLayout(l => {
+      if (l.views.length >= MAX_VIEWS) return l;
+      const n = l.views.length + 1;
+      return {
+        ...l,
+        views: [
+          ...l.views,
+          { id: crypto.randomUUID(), label: `View ${n}`, pos: camPos.current, look: [0, 1.6, 0] as [number, number, number] },
+        ],
+      };
+    });
   }, []);
 
-  const clearView = useCallback(() => {
-    setLayout(l => ({ ...l, view: null }));
+  const removeView = useCallback((id: string) => {
+    setLayout(l => ({
+      ...l,
+      // renumber so the labels stay 1..n after a deletion
+      views: l.views.filter(v => v.id !== id).map((v, i) => ({ ...v, label: `View ${i + 1}` })),
+    }));
   }, []);
 
   const addDecor = useCallback((type: DecorType) => {
@@ -233,11 +247,26 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
         <div className="flex-1" />
         <ToolBtn
           icon="📷"
-          label={layout.view ? 'View Saved' : 'Save View'}
-          active={!!layout.view}
+          label={layout.views.length >= MAX_VIEWS ? 'Views Full' : 'Save View'}
+          disabled={layout.views.length >= MAX_VIEWS}
           onClick={saveView}
         />
-        {layout.view && <ToolBtn icon="✕" label="Auto View" onClick={clearView} />}
+        {layout.views.map(v => (
+          <button
+            key={v.id}
+            onClick={() => removeView(v.id)}
+            title={`${v.label} — click to delete`}
+            className="flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer"
+            style={{
+              fontFamily: HEADING_FONT,
+              color: '#8a7a55',
+              borderColor: 'rgba(184,134,11,0.55)',
+              background: 'rgba(255,250,235,0.9)',
+            }}
+          >
+            👁 {v.label} <span style={{ opacity: 0.55 }}>✕</span>
+          </button>
+        ))}
       </div>
 
       {/* ── Decor toolbar ──────────────────────────────────── */}
