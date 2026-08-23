@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Vector3, type PerspectiveCamera } from 'three';
-import { loadLayout, FLOOR_RADII } from '../layout3d';
+import { loadLayout, saveActiveView, FLOOR_RADII } from '../layout3d';
 import { MandirScene, murtiAnchor, MURTI_EYE, DEVOTEE_EYE } from './MandirScene';
 import { IDOLS } from '../data';
 import type { PlacedIdol } from '../types';
@@ -65,8 +65,18 @@ export default function MandirViewport({ placedIdols, onGarland }: {
   // and switching tabs remounts this component.
   const [layout] = useState(loadLayout);
   const [darshanId, setDarshanId] = useState<string | null>(null);
-  // index into layout.views, or null for the automatic framing
-  const [viewIdx, setViewIdx] = useState<number | null>(layout.views.length ? 0 : null);
+  // index into layout.views, or null for the automatic framing. Restored
+  // from the layout so the devotee returns to where they last stood.
+  const [viewIdx, setViewIdx] = useState<number | null>(() => {
+    const i = layout.views.findIndex(v => v.id === layout.activeViewId);
+    if (i >= 0) return i;
+    return layout.activeViewId === null && layout.views.length ? 0 : null;
+  });
+
+  const chooseView = (i: number | null) => {
+    setViewIdx(i);
+    saveActiveView(i === null ? null : layout.views[i].id);
+  };
   const radius = FLOOR_RADII[layout.floor.size];
 
   // Automatic framing: the shrine rather than the whole floor — when the
@@ -126,14 +136,14 @@ export default function MandirViewport({ placedIdols, onGarland }: {
             display: 'flex', gap: 5, flexWrap: 'wrap', maxWidth: '70%',
           }}
         >
-          <ViewPill label="Auto" active={viewIdx === null} onClick={() => setViewIdx(null)} />
+          <ViewPill label="Auto" active={viewIdx === null} onClick={() => chooseView(null)} />
           {layout.views.map((v, i) => (
             <ViewPill
               key={v.id}
               label={String(i + 1)}
               title={v.label}
               active={viewIdx === i}
-              onClick={() => setViewIdx(i)}
+              onClick={() => chooseView(i)}
             />
           ))}
         </div>

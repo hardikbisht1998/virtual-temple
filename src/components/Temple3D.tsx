@@ -86,7 +86,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol, onSetIdolModel 
   }, []);
 
   const setShell = useCallback((shell: ShellId) => {
-    setLayout(l => ({ ...l, shell, views: [] }));
+    setLayout(l => ({ ...l, shell, views: [], activeViewId: null }));
   }, []);
 
   const setMaterial = useCallback((material: MaterialId) => {
@@ -96,7 +96,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol, onSetIdolModel 
   const applyPreset = useCallback((preset: Preset) => {
     // A preset restyles the space; the devotee's murtis and decor stay put.
     setLayout(l => {
-      const next = { ...l, ...preset.patch, views: [] };
+      const next = { ...l, ...preset.patch, views: [], activeViewId: null };
       const r = FLOOR_RADII[next.floor.size];
       const clamp = ([x, z]: [number, number]): [number, number] => clampToFloor(x, z, r, next.floor.shape);
       return {
@@ -138,6 +138,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol, onSetIdolModel 
       ...l,
       // renumber so the labels stay 1..n after a deletion
       views: l.views.filter(v => v.id !== id).map((v, i) => ({ ...v, label: `View ${i + 1}` })),
+      activeViewId: l.activeViewId === id ? null : l.activeViewId,
     }));
   }, []);
 

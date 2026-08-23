@@ -127,6 +127,7 @@ export function useTempleStore() {
       placedIdols: idolIds.map(idolId => ({
         instanceId: crypto.randomUUID(),
         idolId,
+        modelId: defaultModelId(idolId),
         hasGarland: false,
         hasTilak: false,
       })),

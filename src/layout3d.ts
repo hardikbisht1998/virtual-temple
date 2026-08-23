@@ -59,6 +59,7 @@ export interface Layout3D {
   mandir: boolean; // shrine cabinet on/off
   mandirStyle: MandirStyle; // carved wood (modelled on assets/templestructure.jpg) or marble+gold
   views: SavedView[]; // empty = automatic framing only
+  activeViewId: string | null; // where the Temple page last stood; null = automatic
 }
 
 export const LAYOUT_KEY = 'vt-3d-v1';
@@ -73,6 +74,7 @@ export const DEFAULT_LAYOUT: Layout3D = {
   mandir: true,
   mandirStyle: 'wood',
   views: [],
+  activeViewId: null,
 };
 
 /* One-tap starting points. A newcomer should have something beautiful in
@@ -144,6 +146,7 @@ export function loadLayout(): Layout3D {
       if (!parsed.mandirStyle) merged.mandirStyle = 'wood';
       // Migrate the earlier single-view field into the list.
       const legacy = (parsed as { view?: { pos: [number, number, number]; look: [number, number, number] } | null }).view;
+      if (parsed.activeViewId === undefined) merged.activeViewId = null;
       if (!Array.isArray(parsed.views)) {
         merged.views = legacy
           ? [{ id: 'v1', label: 'View 1', pos: legacy.pos, look: legacy.look }]
@@ -158,4 +161,15 @@ export function loadLayout(): Layout3D {
 /* Default murti arrangement: arc across the back of the hall */
 export function defaultIdolPos(i: number, n: number): [number, number] {
   return [(i - (n - 1) / 2) * 2.6, -5];
+}
+
+/* Remember where the devotee was standing, without disturbing anything else
+   in the layout — the Temple page holds a snapshot, so it re-reads current
+   storage and writes back only this field. */
+export function saveActiveView(id: string | null): void {
+  try {
+    const raw = localStorage.getItem(LAYOUT_KEY);
+    const current: Layout3D = raw ? { ...DEFAULT_LAYOUT, ...JSON.parse(raw) } : DEFAULT_LAYOUT;
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify({ ...current, activeViewId: id }));
+  } catch { /* a full or blocked store just means the spot isn't remembered */ }
 }
