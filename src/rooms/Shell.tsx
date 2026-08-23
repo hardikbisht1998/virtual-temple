@@ -642,9 +642,13 @@ function KeralaShell({ radius, m }: { radius: number; m: MaterialSet }) {
   const copper = <meshStandardMaterial color="#8c4a2a" metalness={0.55} roughness={0.4} envMapIntensity={1.0} />;
   const posts = useMemo(() => {
     const p: [number, number][] = [];
+    // corners
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.push([sx * (half - 0.6), sz * (half - 0.6)]);
+    // mid-side posts
     for (const sx of [-1, 1]) p.push([sx * (half - 0.6), 0]);
-    for (const sz of [-1, 1]) p.push([0 * (half - 0.6) - (half - 0.6) * 0, sz * (half - 0.6)]);
+    // back-centre post only — the front stays fully open so nothing ever
+    // stands between the devotee and the murtis
+    p.push([0, -(half - 0.6)]);
     return p;
   }, [half]);
   return (

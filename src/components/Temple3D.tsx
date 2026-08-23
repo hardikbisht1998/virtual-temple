@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { IDOLS } from '../data';
 import type { PlacedIdol } from '../types';
@@ -26,6 +26,19 @@ function clampToFloor(x: number, z: number, radius: number, shape: FloorShape): 
   if (r <= margin) return [x, z];
   const s = margin / r;
   return [x * s, z * s];
+}
+
+/* Mirrors the live orbit camera into a ref so the toolbar can snapshot it.
+   The devotee frames their temple here; the Temple page then stands there. */
+function CameraProbe({ out }: { out: React.MutableRefObject<[number, number, number]> }) {
+  useFrame(({ camera }) => {
+    out.current = [
+      Math.round(camera.position.x * 100) / 100,
+      Math.round(camera.position.y * 100) / 100,
+      Math.round(camera.position.z * 100) / 100,
+    ];
+  });
+  return null;
 }
 
 /* ── Main component ──────────────────────────────────────────── */
@@ -72,7 +85,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
   }, []);
 
   const setShell = useCallback((shell: ShellId) => {
-    setLayout(l => ({ ...l, shell }));
+    setLayout(l => ({ ...l, shell, view: null }));
   }, []);
 
   const setMaterial = useCallback((material: MaterialId) => {
@@ -82,7 +95,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
   const applyPreset = useCallback((preset: Preset) => {
     // A preset restyles the space; the devotee's murtis and decor stay put.
     setLayout(l => {
-      const next = { ...l, ...preset.patch };
+      const next = { ...l, ...preset.patch, view: null };
       const r = FLOOR_RADII[next.floor.size];
       const clamp = ([x, z]: [number, number]): [number, number] => clampToFloor(x, z, r, next.floor.shape);
       return {
@@ -101,6 +114,16 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
         ? { ...l, mandir: false }
         : { ...l, mandir: true, mandirStyle: style }
     );
+  }, []);
+
+  const camPos = useRef<[number, number, number]>([0, 5, 11.5]);
+
+  const saveView = useCallback(() => {
+    setLayout(l => ({ ...l, view: { pos: camPos.current, look: [0, 1.6, 0] } }));
+  }, []);
+
+  const clearView = useCallback(() => {
+    setLayout(l => ({ ...l, view: null }));
   }, []);
 
   const addDecor = useCallback((type: DecorType) => {
@@ -207,6 +230,14 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
         {PRESETS.map(preset => (
           <ToolBtn key={preset.id} icon={preset.icon} label={preset.label} onClick={() => applyPreset(preset)} />
         ))}
+        <div className="flex-1" />
+        <ToolBtn
+          icon="📷"
+          label={layout.view ? 'View Saved' : 'Save View'}
+          active={!!layout.view}
+          onClick={saveView}
+        />
+        {layout.view && <ToolBtn icon="✕" label="Auto View" onClick={clearView} />}
       </div>
 
       {/* ── Decor toolbar ──────────────────────────────────── */}
@@ -297,6 +328,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol }: Props) {
             onFloorUp={() => setDragId(null)}
           />
 
+          <CameraProbe out={camPos} />
           <OrbitControls
             enabled={!dragId}
             target={[0, 1.6, 0]}

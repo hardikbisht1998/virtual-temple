@@ -35,6 +35,15 @@ export interface DecorItem {
   pos: [number, number];
 }
 
+/* A camera framing the user chose in the 3D editor. When set, the Temple
+   page's altar view uses it instead of the automatic front framing — so a
+   gopuram or roof beam never hides the murtis: the devotee decides where
+   they stand. */
+export interface SavedView {
+  pos: [number, number, number];
+  look: [number, number, number];
+}
+
 export interface Layout3D {
   positions: Record<string, [number, number]>; // instanceId -> [x, z]
   rotations: Record<string, number>;           // instanceId / decor:<id> -> Y angle (rad)
@@ -44,6 +53,7 @@ export interface Layout3D {
   material: MaterialId;
   mandir: boolean; // shrine cabinet on/off
   mandirStyle: MandirStyle; // carved wood (modelled on assets/templestructure.jpg) or marble+gold
+  view: SavedView | null; // null = automatic framing
 }
 
 export const LAYOUT_KEY = 'vt-3d-v1';
@@ -57,6 +67,7 @@ export const DEFAULT_LAYOUT: Layout3D = {
   material: 'marble',
   mandir: true,
   mandirStyle: 'wood',
+  view: null,
 };
 
 /* One-tap starting points. A newcomer should have something beautiful in
@@ -126,6 +137,7 @@ export function loadLayout(): Layout3D {
       }
       if (!parsed.material) merged.material = 'marble';
       if (!parsed.mandirStyle) merged.mandirStyle = 'wood';
+      if (parsed.view === undefined) merged.view = null;
       return merged;
     }
   } catch { /* corrupt layout falls back to default */ }

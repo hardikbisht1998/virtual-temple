@@ -73,12 +73,13 @@ export default function MandirViewport({ placedIdols, onGarland }: {
   const [darshanId, setDarshanId] = useState<string | null>(null);
   const radius = FLOOR_RADII[layout.floor.size];
 
-  // Wide framing: the shrine rather than the whole floor — when the wooden
-  // mandir is up, move in close so it fills the view.
+  // Wide framing: the viewpoint the devotee saved in the 3D editor wins —
+  // they know where their temple looks best. Otherwise frame the shrine
+  // automatically (close in when the mandir cabinet is up).
   const camZ = layout.mandir ? Math.max(11, radius * 0.8) : radius * 1.45;
   const lookY = layout.mandir ? 3.4 : 1.8;
-  const wide: [number, number, number] = [0, 4.4, camZ];
-  const wideLook: [number, number, number] = [0, lookY, 0];
+  const wide: [number, number, number] = layout.view ? layout.view.pos : [0, 4.4, camZ];
+  const wideLook: [number, number, number] = layout.view ? layout.view.look : [0, lookY, 0];
 
   // Darshan framing: eye level, a pace in front, looking up into the face.
   const { standing, facing, deity } = useMemo(() => {
