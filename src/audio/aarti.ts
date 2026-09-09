@@ -6,6 +6,7 @@
    when it is actually asked for instead of bundling ~50MB into the app. */
 
 import { stopOmDrone, isOmDronePlaying } from './templeAudio';
+import { track } from '../analytics';
 
 export interface AartiTrack {
   deity: string;   // IDOLS id
@@ -47,6 +48,30 @@ export interface AartiState {
 }
 
 let audio: HTMLAudioElement | null = null;
+/* Listening time is accumulated across pauses and reported when a track is
+   left, so "how long did they actually listen" is not confused with how long
+   the tab was open. */
+let listenFrom: number | null = null;
+let listened = 0;
+
+function beginListening() {
+  if (listenFrom === null) listenFrom = Date.now();
+}
+function endListening() {
+  if (listenFrom !== null) {
+    listened += (Date.now() - listenFrom) / 1000;
+    listenFrom = null;
+  }
+}
+function reportListening(reason: 'ended' | 'switched' | 'stopped') {
+  endListening();
+  const seconds = Math.round(listened);
+  if (state.deity && seconds > 0) {
+    const pct = state.duration > 0 ? Math.min(100, Math.round((seconds / state.duration) * 100)) : 0;
+    track('aarti_listen', { deity: state.deity, seconds, percent: pct, reason });
+  }
+  listened = 0;
+}
 let state: AartiState = { deity: null, playing: false, position: 0, duration: 0, loading: false, error: null };
 const listeners = new Set<(s: AartiState) => void>();
 
@@ -65,9 +90,9 @@ function element(): HTMLAudioElement {
   el.style.display = 'none';
   el.addEventListener('loadedmetadata', () => emit({ duration: el.duration || 0, loading: false }));
   el.addEventListener('timeupdate', () => emit({ position: el.currentTime }));
-  el.addEventListener('ended', () => emit({ playing: false, position: 0 }));
-  el.addEventListener('play', () => emit({ playing: true }));
-  el.addEventListener('pause', () => emit({ playing: false }));
+  el.addEventListener('ended', () => { reportListening('ended'); emit({ playing: false, position: 0 }); });
+  el.addEventListener('play', () => { beginListening(); emit({ playing: true }); });
+  el.addEventListener('pause', () => { endListening(); emit({ playing: false }); });
   el.addEventListener('error', () => emit({ playing: false, loading: false, error: 'This aarti could not be played.' }));
   if (typeof document !== 'undefined') document.body.appendChild(el);
   audio = el;
@@ -87,13 +112,15 @@ export function getAartiState(): AartiState {
 /* Play a deity's aarti. Starting one silences the Om drone — they occupy the
    same air. Returns false when that deity has no aarti. */
 export function playAarti(deityId: string): boolean {
-  const track = aartiFor(deityId);
-  if (!track) return false;
+  const trackInfo = aartiFor(deityId);
+  if (!trackInfo) return false;
   const el = element();
   if (state.deity !== deityId) {
-    el.src = track.url;
+    if (state.deity) reportListening('switched');
+    el.src = trackInfo.url;
     el.currentTime = 0;
     emit({ deity: deityId, position: 0, duration: 0, loading: true, error: null });
+    track('aarti_play', { deity: deityId });
   }
   if (isOmDronePlaying()) stopOmDrone();
   void el.play().catch(() => emit({ playing: false, loading: false, error: 'Playback was blocked — tap again.' }));
@@ -113,6 +140,7 @@ export function toggleAarti(deityId: string): void {
 
 export function stopAarti(): void {
   if (!audio) return;
+  reportListening('stopped');
   audio.pause();
   audio.removeAttribute('src');
   audio.load();

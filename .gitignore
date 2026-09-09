@@ -25,3 +25,10 @@ dist-ssr
 
 _to_delete/
 .claude/
+
+# local env (holds the GA measurement id)
+.env.local
+.env
+
+# files the desktop app drops when Claude delivers a file card
+Claude outputs/

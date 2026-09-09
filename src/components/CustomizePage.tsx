@@ -1,9 +1,13 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { IDOLS } from '../data';
 import { DeityPhoto } from './DeityPhoto';
 import type { TempleState, UserProfile } from '../types';
 import { downloadBackup, inspectBackup, applyBackup } from '../backup';
+import {
+  subscribeEventLog, clearEventLog, downloadEventLog,
+  analyticsConsent, setAnalyticsConsent, track, type LoggedEvent,
+} from '../analytics';
 
 const DECO_FONT    = "'Cinzel Decorative', serif";
 const HEADING_FONT = "'Cinzel', serif";
@@ -61,6 +65,8 @@ export function CustomizePage({
       />
 
       <BackupCard templeName={state.templeName} />
+
+      <AnalyticsCard />
 
       {/* ── Footer actions ─────────────────────────────────── */}
       <motion.div
@@ -137,6 +143,7 @@ function BackupCard({ templeName }: { templeName: string }) {
       setNote({ kind: 'err', text: res.message });
       return;
     }
+    track('backup_restore', {});
     // reload so every hook re-reads storage rather than holding stale state
     window.location.reload();
   }
@@ -155,7 +162,7 @@ function BackupCard({ templeName }: { templeName: string }) {
 
       <div className="flex flex-wrap gap-2.5">
         <button
-          onClick={() => { setNote(null); downloadBackup(templeName); }}
+          onClick={() => { setNote(null); track('backup_save', {}); downloadBackup(templeName); }}
           className="flex items-center gap-2 text-xs px-4 py-2.5 rounded-xl font-bold cursor-pointer transition-all active:scale-95"
           style={{
             fontFamily: HEADING_FONT,
@@ -233,6 +240,159 @@ function BackupCard({ templeName }: { templeName: string }) {
         </p>
       )}
     </SectionCard>
+  );
+}
+
+
+/* ── Usage log ───────────────────────────────────────────────────
+   Every tracked event is kept locally so the app can be understood without
+   any analytics account, and so it is obvious what would be sent if one is
+   configured. Nothing here identifies a person. */
+function AnalyticsCard() {
+  const [events, setEvents] = useState<LoggedEvent[]>([]);
+  const [consent, setConsent] = useState(analyticsConsent);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => subscribeEventLog(setEvents), []);
+
+  /* A quick read on where attention actually went, computed from the same
+     events GA would receive. */
+  const summary = (() => {
+    const secondsBy = new Map<string, number>();
+    const counts = new Map<string, number>();
+    for (const e of events) {
+      counts.set(e.name, (counts.get(e.name) ?? 0) + 1);
+      const secs = typeof e.params.seconds === 'number' ? e.params.seconds : 0;
+      if (!secs) continue;
+      const key =
+        e.name === 'screen_time' ? `screen:${e.params.screen}` :
+        e.name === 'darshan_time' ? `darshan:${e.params.deity}` :
+        e.name === 'aarti_listen' ? `aarti:${e.params.deity}` : e.name;
+      secondsBy.set(key, (secondsBy.get(key) ?? 0) + secs);
+    }
+    return {
+      top: [...secondsBy.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5),
+      rites: counts.get('rite') ?? 0,
+      darshans: counts.get('darshan_enter') ?? 0,
+      pujas: counts.get('puja_complete') ?? 0,
+    };
+  })();
+
+  const fmt = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`);
+
+  return (
+    <SectionCard
+      icon="📊"
+      title="Usage & Analytics"
+      subtitle="What gets used, and for how long"
+      delay={0.22}
+    >
+      <div className="flex flex-wrap gap-4 mb-4">
+        <Stat label="Events" value={String(events.length)} />
+        <Stat label="Darshans" value={String(summary.darshans)} />
+        <Stat label="Rites" value={String(summary.rites)} />
+        <Stat label="Pujas completed" value={String(summary.pujas)} />
+      </div>
+
+      {summary.top.length > 0 && (
+        <div className="mb-4">
+          <p className="text-[10px] tracking-[0.18em] uppercase font-bold mb-2" style={{ fontFamily: HEADING_FONT, color: '#b8860b' }}>
+            Where the time went
+          </p>
+          <div className="flex flex-col gap-1">
+            {summary.top.map(([key, secs]) => {
+              const max = summary.top[0][1] || 1;
+              return (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="text-[10px] text-amber-900/80 w-40 truncate">{key}</span>
+                  <div className="flex-1 rounded-full overflow-hidden" style={{ height: 8, background: 'rgba(184,134,11,0.14)' }}>
+                    <div style={{ width: `${(secs / max) * 100}%`, height: '100%', background: 'linear-gradient(90deg,#e6c14c,#b8860b)' }} />
+                  </div>
+                  <span className="text-[10px] text-amber-700/80 w-14 text-right" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {fmt(secs)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <label className="flex items-start gap-2.5 mb-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={consent}
+          onChange={e => { setAnalyticsConsent(e.target.checked); setConsent(e.target.checked); }}
+          style={{ marginTop: 2, accentColor: '#b8860b' }}
+        />
+        <span className="text-[11px] text-amber-800/85 leading-relaxed">
+          Share anonymous usage data. Events record which features are used and for
+          how long — never your name, your temple&rsquo;s name, or anything that
+          identifies you. The log below is exactly what would be sent.
+        </span>
+      </label>
+
+      <div className="flex flex-wrap gap-2.5">
+        <button
+          onClick={() => setExpanded(x => !x)}
+          className="text-xs px-4 py-2 rounded-xl font-bold cursor-pointer active:scale-95"
+          style={{ fontFamily: HEADING_FONT, background: 'rgba(255,255,255,0.75)', color: '#7a5a1e', border: '1px solid rgba(201,162,39,0.6)' }}
+        >
+          {expanded ? 'Hide log' : `View log (${events.length})`}
+        </button>
+        <button
+          onClick={downloadEventLog}
+          disabled={events.length === 0}
+          className="text-xs px-4 py-2 rounded-xl font-bold cursor-pointer active:scale-95"
+          style={{
+            fontFamily: HEADING_FONT,
+            background: events.length ? 'linear-gradient(135deg, #e6c14c, #b8860b)' : 'rgba(220,215,200,0.6)',
+            color: events.length ? '#fff' : '#a9a294', border: 'none',
+          }}
+        >
+          ⬇ Export log
+        </button>
+        <button
+          onClick={() => { clearEventLog(); track('log_cleared', {}); }}
+          className="text-xs px-4 py-2 rounded-xl font-semibold cursor-pointer active:scale-95"
+          style={{ fontFamily: HEADING_FONT, background: 'transparent', color: '#8a7a55', border: '1px solid rgba(176,180,190,0.7)' }}
+        >
+          Clear
+        </button>
+      </div>
+
+      {expanded && (
+        <div
+          className="mt-3 rounded-2xl p-3 overflow-y-auto"
+          style={{ maxHeight: 260, background: 'rgba(40,32,18,0.05)', border: '1px solid rgba(201,162,39,0.35)' }}
+        >
+          {events.length === 0 ? (
+            <p className="text-[11px] text-amber-700/70">No events yet — use the temple and they will appear here.</p>
+          ) : (
+            [...events].reverse().map((e, i) => (
+              <div key={i} className="text-[10px] font-mono leading-relaxed" style={{ color: '#5a4a2a' }}>
+                <span style={{ opacity: 0.55 }}>{new Date(e.t).toLocaleTimeString()}</span>{' '}
+                <span style={{ color: '#b8860b', fontWeight: 700 }}>{e.name}</span>{' '}
+                <span style={{ opacity: 0.8 }}>
+                  {Object.entries(e.params).map(([k, v]) => `${k}=${v}`).join(' ')}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-lg font-bold text-amber-950 leading-none" style={{ fontFamily: HEADING_FONT, fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </p>
+      <p className="text-[9px] tracking-[0.14em] uppercase text-amber-700/75 mt-1">{label}</p>
+    </div>
   );
 }
 

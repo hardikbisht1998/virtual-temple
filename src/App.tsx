@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense, useEffect } from 'react';
+import { useState, useRef, lazy, Suspense, useEffect } from 'react';
 import { useTempleStore } from './useTempleStore';
 import { OnboardingWizard } from './components/OnboardingWizard';
 import { TempleAltar } from './components/TempleAltar';
@@ -8,6 +8,7 @@ import { DailyShlokaModal } from './components/DailyShlokaModal';
 import { DarshanShareModal } from './components/DarshanShareModal';
 import { startOmDrone, stopOmDrone, isOmDronePlaying } from './audio/templeAudio';
 import { AartiBar, AartiPicker, useAarti } from './components/AartiPlayer';
+import { initAnalytics, track, trackDuration } from './analytics';
 
 const Temple3D = lazy(() =>
   import('./components/Temple3D').then(m => ({ default: m.Temple3D }))
@@ -37,6 +38,25 @@ export default function App() {
   const [showDarshanModal,   setShowDarshanModal]   = useState(false);
   const [showAarti,          setShowAarti]          = useState(false);
   const aarti = useAarti();
+
+  useEffect(() => { initAnalytics(); }, []);
+
+  /* Time spent per tab: when the page changes (or the tab is closed) close
+     out the previous screen with how long it held attention. */
+  const screenSince = useRef({ page, at: Date.now() });
+  useEffect(() => {
+    const prev = screenSince.current;
+    if (prev.page !== page) {
+      trackDuration('screen_time', prev.at, { screen: prev.page });
+      screenSince.current = { page, at: Date.now() };
+      track('screen_view', { screen: page });
+    }
+  }, [page]);
+  useEffect(() => {
+    const flush = () => trackDuration('screen_time', screenSince.current.at, { screen: screenSince.current.page });
+    window.addEventListener('pagehide', flush);
+    return () => { window.removeEventListener('pagehide', flush); flush(); };
+  }, []);
 
   /* The aarti player stops the drone when a song starts — reflect that in
      the toggle rather than leaving it lit with nothing playing. */

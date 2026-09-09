@@ -5,6 +5,7 @@ import {
   AARTIS, aartiFor, subscribeAarti, getAartiState, toggleAarti, playAarti,
   pauseAarti, stopAarti, seekAarti, formatTime, type AartiState,
 } from '../audio/aarti';
+import { track as trackEvent } from '../analytics';
 
 const HEADING_FONT = "'Cinzel', serif";
 
@@ -176,7 +177,7 @@ export function AartiPicker({ open, onClose, placedDeityIds }: {
               return (
                 <button
                   key={track.deity}
-                  onClick={() => toggleAarti(track.deity)}
+                  onClick={() => { trackEvent('aarti_toggle', { deity: track.deity, from: 'picker' }); toggleAarti(track.deity); }}
                   className="flex items-center gap-3 p-2.5 rounded-2xl border text-left cursor-pointer transition-all hover:scale-[1.01]"
                   style={{
                     borderColor: isCurrent ? '#b8860b' : 'rgba(201,162,39,0.35)',

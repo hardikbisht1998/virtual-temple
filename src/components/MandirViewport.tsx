@@ -1,10 +1,11 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Vector3, type PerspectiveCamera } from 'three';
 import { loadLayout, saveActiveView, FLOOR_RADII } from '../layout3d';
 import { MandirScene, murtiAnchor, MURTI_EYE, DEVOTEE_EYE } from './MandirScene';
 import { IDOLS } from '../data';
 import { aartiFor, toggleAarti, useAartiPlaying } from './aartiHooks';
+import { track, trackDuration } from '../analytics';
 import type { PlacedIdol } from '../types';
 
 /* How far in front of the murti the devotee stands. */
@@ -77,6 +78,7 @@ export default function MandirViewport({ placedIdols, onGarland }: {
   const chooseView = (i: number | null) => {
     setViewIdx(i);
     saveActiveView(i === null ? null : layout.views[i].id);
+    track('view_switch', { view: i === null ? 'auto' : String(i + 1) });
   };
   const radius = FLOOR_RADII[layout.floor.size];
 
@@ -107,6 +109,26 @@ export default function MandirViewport({ placedIdols, onGarland }: {
   }, [darshanId, layout, placedIdols]);
 
   const inDarshan = darshanId !== null && standing !== null;
+
+  /* How long the devotee stands before each deity — the closest thing this
+     app has to a measure of devotion, and the most interesting number in it. */
+  const darshanSince = useRef<{ deity: string; at: number } | null>(null);
+  useEffect(() => {
+    const prev = darshanSince.current;
+    if (prev && prev.deity !== deity?.id) {
+      trackDuration('darshan_time', prev.at, { deity: prev.deity });
+      darshanSince.current = null;
+    }
+    if (deity && (!prev || prev.deity !== deity.id)) {
+      track('darshan_enter', { deity: deity.id });
+      darshanSince.current = { deity: deity.id, at: Date.now() };
+    }
+    if (!deity) darshanSince.current = null;
+  }, [deity]);
+  useEffect(() => () => {
+    const prev = darshanSince.current;
+    if (prev) trackDuration('darshan_time', prev.at, { deity: prev.deity });
+  }, []);
   // true only when the aarti playing is this deity's own
   const aartiOn = useAartiPlaying(deity?.id);
   const camPos = inDarshan ? standing! : wide;
@@ -166,7 +188,11 @@ export default function MandirViewport({ placedIdols, onGarland }: {
             }}
           >
             <button
-              onClick={() => darshanId && onGarland(darshanId)}
+              onClick={() => {
+                if (!darshanId) return;
+                track('rite', { rite: 'pushpam', deity: deity?.id ?? 'unknown', from: 'darshan' });
+                onGarland(darshanId);
+              }}
               style={{
                 pointerEvents: 'auto',
                 fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700,
@@ -181,7 +207,7 @@ export default function MandirViewport({ placedIdols, onGarland }: {
             </button>
             {deity && aartiFor(deity.id) && (
               <button
-                onClick={() => toggleAarti(deity.id)}
+                onClick={() => { track('aarti_toggle', { deity: deity.id, from: 'darshan' }); toggleAarti(deity.id); }}
                 style={{
                   pointerEvents: 'auto',
                   fontFamily: "'Cinzel', serif", fontSize: 12, fontWeight: 700,

@@ -9,6 +9,7 @@ import {
   type ShellId, type MaterialId, type MandirStyle, type Preset,
 } from '../layout3d';
 import { MATERIALS } from '../materials/sets';
+import { track } from '../analytics';
 import { MandirScene } from './MandirScene';
 import { modelsFor, hasModel } from '../constants/models';
 
@@ -86,14 +87,17 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol, onSetIdolModel 
   }, []);
 
   const setShell = useCallback((shell: ShellId) => {
+    track('shell_change', { shell });
     setLayout(l => ({ ...l, shell, views: [], activeViewId: null }));
   }, []);
 
   const setMaterial = useCallback((material: MaterialId) => {
+    track('material_change', { material });
     setLayout(l => ({ ...l, material }));
   }, []);
 
   const applyPreset = useCallback((preset: Preset) => {
+    track('preset_apply', { preset: preset.id });
     // A preset restyles the space; the devotee's murtis and decor stay put.
     setLayout(l => {
       const next = { ...l, ...preset.patch, views: [], activeViewId: null };
@@ -110,6 +114,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol, onSetIdolModel 
   /* Clicking the active style turns the cabinet off; clicking the other
      switches style (turning it on if needed). */
   const pickMandir = useCallback((style: MandirStyle) => {
+    track('mandir_style', { style });
     setLayout(l =>
       l.mandir && l.mandirStyle === style
         ? { ...l, mandir: false }
@@ -120,6 +125,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol, onSetIdolModel 
   const camPos = useRef<[number, number, number]>([0, 5, 11.5]);
 
   const saveView = useCallback(() => {
+    track('view_save', {});
     setLayout(l => {
       if (l.views.length >= MAX_VIEWS) return l;
       const n = l.views.length + 1;
@@ -143,6 +149,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol, onSetIdolModel 
   }, []);
 
   const addDecor = useCallback((type: DecorType) => {
+    track('decor_add', { decor: type });
     const item: DecorItem = {
       id: crypto.randomUUID(),
       type,
@@ -310,7 +317,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol, onSetIdolModel 
           {IDOLS.map(idol => (
             <button
               key={idol.id}
-              onClick={() => { onAddIdol(idol.id); setShowPicker(false); }}
+              onClick={() => { track('deity_add', { deity: idol.id }); onAddIdol(idol.id); setShowPicker(false); }}
               className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-lg border transition-all cursor-pointer hover:scale-105"
               style={{
                 fontFamily: HEADING_FONT,
@@ -356,7 +363,7 @@ export function Temple3D({ placedIdols, onAddIdol, onRemoveIdol, onSetIdolModel 
                 icon="🕉"
                 label={f.label}
                 active={(placed.modelId ?? forms[0].id) === f.id}
-                onClick={() => onSetIdolModel(placed.instanceId, f.id)}
+                onClick={() => { track('murti_form', { deity: placed.idolId, model: f.id }); onSetIdolModel(placed.instanceId, f.id); }}
               />
             ))}
           </div>

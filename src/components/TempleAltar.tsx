@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { PlacedIdol, DivaItem, PrasadItem, PrasadType } from '../types';
 import { playGhantaSound, playShankhSound, playAbhishekamSound, playBeadClickSound } from '../audio/templeAudio';
 import { VIDHI, ritesDoneFromState, nextRite, type RiteId } from '../ritual/vidhi';
+import { track } from '../analytics';
 
 /* The live 3D front view is heavy (three.js + models), so it loads lazily */
 const MandirViewport = lazy(() => import('./MandirViewport'));
@@ -53,14 +54,17 @@ export function TempleAltar({
   const [splashingJal,   setSplashingJal]   = useState(false);
   const [confirmReset,   setConfirmReset]   = useState(false);
 
+  /* The rites completed this sitting, mirrored in a ref. Sound and analytics
+     are side effects and must not live inside a state updater — React invokes
+     updaters twice in development, which rang the bead twice and double-counted
+     every rite. */
+  const ritesRef = useRef<Set<RiteId>>(new Set());
   const completeRite = useCallback((id: RiteId) => {
-    setSessionRites(prev => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.add(id);
-      playBeadClickSound();
-      return next;
-    });
+    if (ritesRef.current.has(id)) return;
+    ritesRef.current.add(id);
+    playBeadClickSound();
+    track('rite', { rite: id });
+    setSessionRites(new Set(ritesRef.current));
   }, []);
 
   function ringBell(side: 'L' | 'R') {
@@ -95,6 +99,7 @@ export function TempleAltar({
   const finishAarti = useCallback((completed: boolean) => {
     setAartiActive(false);
     if (completed) {
+      track('aarti_gesture_complete', {});
       completeRite('aarti');
       playShankhSound();
     }
@@ -107,6 +112,7 @@ export function TempleAltar({
       return;
     }
     setConfirmReset(false);
+    ritesRef.current = new Set();
     setSessionRites(new Set());
     onReset();
   }
@@ -125,6 +131,17 @@ export function TempleAltar({
   })();
   const upNext = nextRite(ritesDone);
   const sampurna = upNext === null && placedIdols.length > 0;
+
+  /* Fires once when the ninth rite lands — the completion rate of the vidhi
+     is the clearest signal of whether the ritual flow actually works. */
+  const sampurnaSent = useRef(false);
+  useEffect(() => {
+    if (sampurna && !sampurnaSent.current) {
+      sampurnaSent.current = true;
+      track('puja_complete', { rites: VIDHI.length });
+    }
+    if (!sampurna) sampurnaSent.current = false;
+  }, [sampurna]);
 
   return (
     <div className="relative w-full select-none">
