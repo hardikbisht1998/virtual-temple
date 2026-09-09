@@ -104,11 +104,16 @@ declare global {
   interface Window { dataLayer?: unknown[]; gtag?: (...args: unknown[]) => void }
 }
 
-function gtag(...args: unknown[]): void {
+/* gtag.js reads its queue as `arguments` objects, which is why Google's own
+   snippet is `function gtag(){dataLayer.push(arguments)}` rather than anything
+   tidier. Pushing a plain Array is a well-known way for events to be quietly
+   ignored, so this deliberately keeps the canonical shape. */
+const gtag: (...args: unknown[]) => void = function () {
   if (typeof window === 'undefined') return;
   window.dataLayer = window.dataLayer || [];
-  window.dataLayer.push(args);
-}
+  // eslint-disable-next-line prefer-rest-params
+  window.dataLayer.push(arguments);
+};
 
 /* Load GA4 once, at startup. Without VITE_GA_ID this does nothing at all —
    the app runs identically in development with only the local log. */
@@ -116,9 +121,10 @@ export function initAnalytics(): void {
   if (started || typeof window === 'undefined') return;
   started = true;
 
-  track('session_start', { has_ga: !!GA_ID });
-
-  if (!GA_ID) return;
+  if (!GA_ID) {
+    track('session_start', { has_ga: false });
+    return;
+  }
 
   gtag('consent', 'default', {
     analytics_storage: analyticsConsent() ? 'granted' : 'denied',
@@ -135,6 +141,11 @@ export function initAnalytics(): void {
     send_page_view: false,
     anonymize_ip: true,
   });
+
+  /* Only now. Anything queued ahead of `config` can be discarded when gtag.js
+     drains the queue, and losing the first event of every session is exactly
+     the kind of gap that makes analytics quietly untrustworthy. */
+  track('session_start', { has_ga: true });
 }
 
 /* ── the one call sites use ──────────────────────────────────── */
