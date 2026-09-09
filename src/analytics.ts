@@ -122,7 +122,7 @@ export function initAnalytics(): void {
   started = true;
 
   if (!GA_ID) {
-    track('session_start', { has_ga: false });
+    track('temple_open', { has_ga: false });
     return;
   }
 
@@ -145,10 +145,22 @@ export function initAnalytics(): void {
   /* Only now. Anything queued ahead of `config` can be discarded when gtag.js
      drains the queue, and losing the first event of every session is exactly
      the kind of gap that makes analytics quietly untrustworthy. */
-  track('session_start', { has_ga: true });
+  track('temple_open', { has_ga: true });
+  trackScreen('temple');
 }
 
 /* ── the one call sites use ──────────────────────────────────── */
+
+/* GA4 keeps a list of event names for its own automatic events and SILENTLY
+   DROPS any custom event that reuses one — no error, no warning, the event
+   simply never appears in a report. That failure looks exactly like the tag
+   not being installed, which is a miserable thing to debug, so the names are
+   listed here and guarded rather than trusted. */
+const GA_RESERVED = new Set([
+  'session_start', 'first_visit', 'first_open', 'user_engagement',
+  'screen_view', 'page_view', 'error', 'app_remove', 'app_update',
+  'in_app_purchase', 'ad_click', 'ad_exposure', 'ad_impression',
+]);
 
 export function track(name: string, params: Record<string, string | number | boolean> = {}): void {
   const entry: LoggedEvent = { t: Date.now(), name, params };
@@ -156,7 +168,23 @@ export function track(name: string, params: Record<string, string | number | boo
   persistLog();
   logListeners.forEach(fn => fn(log));
 
-  if (GA_ID && analyticsConsent()) gtag('event', name, params);
+  if (GA_ID && analyticsConsent() && !GA_RESERVED.has(name)) gtag('event', name, params);
+}
+
+/* Moving between tabs.
+
+   Two things happen, deliberately. The local log records `screen_open`, which
+   is ours to name. GA4 gets a real `page_view` — the app is a single page, so
+   without one GA4's Pages and screens report, its Views metric and half of
+   Realtime stay empty however many custom events arrive. Each tab is given its
+   own synthetic path so those reports read as three pages rather than one. */
+export function trackScreen(screen: string): void {
+  track('screen_open', { screen });
+  if (!GA_ID || !analyticsConsent() || typeof window === 'undefined') return;
+  gtag('event', 'page_view', {
+    page_title: `Virtual Temple — ${screen}`,
+    page_location: `${window.location.origin}/${screen}`,
+  });
 }
 
 /* Durations are the whole point of "how long do people spend here", so they

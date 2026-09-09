@@ -8,7 +8,7 @@ import { DailyShlokaModal } from './components/DailyShlokaModal';
 import { DarshanShareModal } from './components/DarshanShareModal';
 import { startOmDrone, stopOmDrone, isOmDronePlaying } from './audio/templeAudio';
 import { AartiBar, AartiPicker, useAarti } from './components/AartiPlayer';
-import { initAnalytics, track, trackDuration } from './analytics';
+import { initAnalytics, trackDuration, trackScreen } from './analytics';
 
 const Temple3D = lazy(() =>
   import('./components/Temple3D').then(m => ({ default: m.Temple3D }))
@@ -49,7 +49,7 @@ export default function App() {
     if (prev.page !== page) {
       trackDuration('screen_time', prev.at, { screen: prev.page });
       screenSince.current = { page, at: Date.now() };
-      track('screen_view', { screen: page });
+      trackScreen(page);
     }
   }, [page]);
   useEffect(() => {
